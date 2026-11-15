@@ -2,7 +2,7 @@ import { addEvent, claimForAttach, getReceipt, listFiles, listOpen, pin, release
 import { IMAGE_MAX_SIDE, LOOKBACK_DAYS, STUCK_AFTER_DAYS, type Env } from "../env";
 import * as freeagent from "../freeagent/client";
 import { AttachUnconfirmed, FreeAgentAuthError, FreeAgentUnavailable, type BankLine } from "../freeagent/client";
-import { notify } from "../notify";
+import { notify, UNCONFIRMED } from "../notify";
 import { readReceipt } from "../read/reader";
 import { decide, type Decision } from "./matcher";
 import { rateToGbp } from "./fx";
@@ -19,7 +19,6 @@ export interface Deps {
 }
 
 const DAY_MS = 86_400_000;
-export const UNCONFIRMED = "FreeAgent did not confirm the attachment. Check the transaction in FreeAgent before you press Retry.";
 const NEEDS_CONVERSION = new Set(["image/webp", "image/heic", "image/heif"]); // FreeAgent takes only PNG, JPEG, GIF, PDF
 
 /** Converts WebP and HEIC/HEIF to JPEG, scaled down to IMAGE_MAX_SIDE; every other file passes through unchanged. */

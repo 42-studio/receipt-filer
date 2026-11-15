@@ -8,6 +8,9 @@ export type Notify = (env: NotifyEnv, kind: Kind, receipt?: Receipt) => Promise<
 /** Every notification subject starts with this; the email handler drops mail that carries it. */
 export const SUBJECT_PREFIX = "Receipt filer:";
 
+/** The reason the runner stores when an attach may or may not have been saved. */
+export const UNCONFIRMED = "FreeAgent did not confirm the attachment. Check the transaction in FreeAgent before you press Retry.";
+
 const QUIET_REASONS = new Set(["no_total", "zero_total"]); // newsletters and zero invoices make no noise
 const DAY_MS = 86_400_000;
 
@@ -31,7 +34,7 @@ function compose(kind: Kind, r: Receipt | undefined, appUrl: string): { subject:
     could_not_read: ["Could not read", WHY[r?.reason ?? ""] ?? "The receipt could not be read."],
     stuck: ["Still unmatched", "No matching bank transaction has appeared after two weeks."],
     needs_choice: ["Choose a match", "More than one bank transaction fits. Pick the right one."],
-    failed: ["Could not file", `FreeAgent rejected the attachment${r?.reason ? `: ${r.reason}` : "."}`],
+    failed: ["Could not file", r?.reason === UNCONFIRMED ? UNCONFIRMED : `FreeAgent rejected the attachment${r?.reason ? `: ${r.reason}` : "."}`],
   }[kind];
   return { subject: `${SUBJECT_PREFIX} ${label} - ${name}`, text: `${why}\n\nReceipt: ${name}\n${link}\n` };
 }

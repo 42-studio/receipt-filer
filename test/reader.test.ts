@@ -73,6 +73,13 @@ it("sends subject, body and PDF text together, with the email date as reference_
   expect(Object.keys(req.input.fields)).toEqual(["total", "date", "date_text", "supplier", "currency"]);
 });
 
+it("sends a plain reference day when the email date is a timestamp, and none when it is not a day", async () => {
+  await readInput(h.env, { ...textEmail, emailDate: "2026-11-13T09:00:00.000Z" }, [textPdf]);
+  expect(lastInput().reference_date).toBe("2026-11-13");
+  await readInput(h.env, { ...textEmail, emailDate: "Thu, 12 Nov 2026" }, [textPdf]);
+  expect(lastInput()).not.toHaveProperty("reference_date");
+});
+
 it("converts an HTML body to text with toMarkdown", async () => {
   h.f.mdText = (n) => (n.endsWith(".html") ? "converted body text" : LONG);
   await readInput(h.env, { ...textEmail, body: "<p>hi</p>", bodyIsHtml: true }, [textPdf]);

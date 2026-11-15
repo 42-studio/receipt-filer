@@ -64,7 +64,8 @@ export async function readInput(env: ReaderEnv, email: Email, files: InFile[]): 
 
     const input: Record<string, unknown> = { model: "clairic", state, fields };
     if (images.length) input.images = images;
-    if (email.emailDate) input.reference_date = email.emailDate;
+    const refDay = email.emailDate?.slice(0, 10) ?? ""; // postal-mime gives a full timestamp; Clairic was tested with a plain day
+    if (/^\d{4}-\d{2}-\d{2}$/.test(refDay) && !Number.isNaN(Date.parse(refDay))) input.reference_date = refDay;
     const res = (await (env.AI as unknown as { run(m: string, i: unknown): Promise<unknown> }).run(env.CLAIRIC_MODEL, input)) as { answers: Record<string, Answer> };
     const a = res?.answers;
     if (!a) throw new Error("Clairic reply had no answers");

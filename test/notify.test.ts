@@ -94,3 +94,13 @@ it("logs which setting is missing and sends nothing when NOTIFY_TO or FORWARD_AD
   }
   err.mockRestore();
 });
+
+it("uses the unconfirmed-attach reason on its own in the failed email", async () => {
+  const { e, send } = fakeEnv();
+  const reason = "FreeAgent did not confirm the attachment. Check the transaction in FreeAgent before you press Retry.";
+  const r = await make({ state: "failed", reason });
+  await notify(e, "failed", { ...r, reason });
+  const text = (send.mock.calls[0] as any[])[0].text as string;
+  expect(text.startsWith(reason)).toBe(true);
+  expect(text).not.toContain("rejected");
+});
