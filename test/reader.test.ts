@@ -202,6 +202,15 @@ it("readReceipt writes waiting_payment, or could_not_read with the reason, or le
   expect((await listEvents(env.DB, id)).length).toBe(1);
 });
 
+it("readReceipt stores the receipt's own day when the email date is a postal-mime timestamp", async () => {
+  const r = await createReceipt(env.DB, { messageId: crypto.randomUUID(), emailDate: "2026-11-13T09:00:00.000Z", sender: "a@b.c", subject: "Receipt", body: "Thanks", bodyIsHtml: false, state: "reading", reason: null });
+  await env.FILES.put(`test/${r.id}.pdf`, textPdf.data);
+  await addFile(env.DB, { receiptId: r.id, r2Key: `test/${r.id}.pdf`, filename: "r.pdf", contentType: "application/pdf", size: textPdf.data.length, sha256: r.id });
+  h.f.runAnswers = answers({ total: 12, date: "2026-11-02", date_text: "02/11/2026" });
+  await readReceipt(h.env, r.id);
+  expect((await getReceipt(env.DB, r.id))!.receiptDate).toBe("2026-11-02");
+});
+
 async function makeReceipt(state: "reading" | "filed" = "reading") {
   const r = await createReceipt(env.DB, { messageId: crypto.randomUUID(), emailDate: "2026-11-13", sender: "a@b.c", subject: "Receipt", body: "Thanks", bodyIsHtml: false, state, reason: null });
   const r2Key = `test/${r.id}.pdf`;

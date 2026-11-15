@@ -34,5 +34,15 @@ it("returns the candidate as it is when there is no email date", () => {
   expect(chooseDate({ inputKind: "image", typed: "2024-01-01", written: null, emailDate: null })).toBe("2024-01-01");
   expect(chooseDate({ inputKind: "text", typed: null, written: "bad", emailDate: null })).toBeNull();
 });
+it("compares on the day of a postal-mime timestamp and always returns a plain day", () => {
+  const ts = "2026-11-13T09:00:00.000Z";
+  expect(chooseDate({ inputKind: "text", typed: "2026-11-02", written: "02/11/2026", emailDate: ts })).toBe("2026-11-02");
+  expect(chooseDate({ inputKind: "image", typed: null, written: null, emailDate: ts })).toBe("2026-11-13");
+  expect(chooseDate({ inputKind: "image", typed: "2028-03-14", written: null, emailDate: ts })).toBe("2026-11-13");
+  expect(chooseDate({ inputKind: "image", typed: "2026-11-13T10:00:00Z", written: null, emailDate: null })).toBeNull();
+});
+it("falls back to the typed date when a text receipt's written date does not parse", () => {
+  expect(chooseDate({ inputKind: "text", typed: "2026-11-02", written: "2nd November", emailDate: "2026-11-13T09:00:00.000Z" })).toBe("2026-11-02");
+});
 it.each([["£", "GBP"], ["GBP", "GBP"], ["$", "USD"], ["US$", "USD"], ["usd", "USD"], ["€", "EUR"], ["chf", "CHF"], [" chf ", "CHF"], ["", "GBP"], [null, "GBP"]])(
   "maps %s", (s, c) => expect(toCurrency(s)).toBe(c));

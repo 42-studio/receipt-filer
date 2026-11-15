@@ -6,7 +6,7 @@ const FX_URL = "https://api.frankfurter.dev/v1";
 export async function rateToGbp(env: Env, day: string, currency: string): Promise<number | null> {
   const cur = currency.toUpperCase();
   if (cur === "GBP") return 1;
-  if (!/^[A-Z]{3}$/.test(cur)) return null;
+  if (!/^[A-Z]{3}$/.test(cur) || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
   try {
     const hit = await env.DB.prepare("SELECT to_gbp FROM rates WHERE day = ? AND currency = ?").bind(day, cur).first<{ to_gbp: number }>();
     if (hit) return hit.to_gbp;

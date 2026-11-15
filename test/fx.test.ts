@@ -59,3 +59,9 @@ it("returns null and stores nothing on failure", async () => {
   expect(await rateToGbp(env, "2026-11-09", "USD")).toBeNull();
   expect((await stored()).results).toEqual([]);
 });
+
+it("returns null with no request when the day is not YYYY-MM-DD", async () => {
+  expect(await rateToGbp(env, "2026-11-09T09:00:00.000Z", "USD")).toBeNull();
+  expect(await rateToGbp(env, "13/11/2026", "USD")).toBeNull();
+  expect(urls).toHaveLength(0);
+});
