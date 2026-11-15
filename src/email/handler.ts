@@ -1,6 +1,6 @@
 import { addEvent, addFile, createReceipt, findByMessageId, findDuplicateFile, updateReceipt } from "../db";
 import type { Env } from "../env";
-import { notify, type Notify } from "../notify";
+import { notify, SUBJECT_PREFIX, type Notify } from "../notify";
 import { parseEmail, selectReceiptFiles } from "./parse";
 
 const GMAIL_CONFIRMATION = "forwarding-noreply@google.com";
@@ -15,6 +15,13 @@ export function isAllowedSender(envelopeFrom: string, allowed: string[]): boolea
   const tag = from.indexOf("+caf_=");
   const base = tag !== -1 && tag < at ? from.slice(0, tag) + from.slice(at) : from;
   return allowed.some((a) => a.trim() !== "" && a.trim().toLowerCase() === base);
+}
+
+// Our own notification, forwarded back (for example by a wide Gmail rule): storing it would send another notification.
+export function isOwnNotification(from: string, subject: string, forwardAddress: string): boolean {
+  const own = forwardAddress.trim().toLowerCase();
+  if (own && from.trim().toLowerCase() === own) return true;
+  return subject.replace(/^\s*(?:(?:fwd?|re)\s*:\s*)*/i, "").toLowerCase().startsWith(SUBJECT_PREFIX.toLowerCase());
 }
 
 async function sha256Hex(data: Uint8Array): Promise<string> {
@@ -40,6 +47,7 @@ export async function handleEmail(
     await addEvent(env.DB, r.id, `Could not read the email: ${String(e)}`);
     return notifyFn(env, "could_not_read", r);
   }
+  if (isOwnNotification(email.from, email.subject, env.FORWARD_ADDRESS ?? "")) return console.log("dropped one of our own notifications", email.subject);
   if (email.messageId && (await findByMessageId(env.DB, email.messageId))) return;
 
   const { files, tooLarge } = selectReceiptFiles(email.attachments);

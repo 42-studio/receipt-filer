@@ -8,7 +8,8 @@ import pdfAttached from "./fixtures/pdf-attached.eml?raw";
 import plainStub from "./fixtures/plain-stub.eml?raw";
 
 const ME = "josh@example.com";
-const testEnv = { ...env, ALLOWED_SENDERS: `${ME}, other@example.com`, NOTIFY_TO: "owner@example.com", EMAIL: { send: vi.fn(async () => ({ messageId: "x" })) } } as unknown as Env;
+const FORWARD = "receipts-k3v9x2@example.org";
+const testEnv = { ...env, ALLOWED_SENDERS: `${ME}, other@example.com`, NOTIFY_TO: "owner@example.com", FORWARD_ADDRESS: FORWARD, EMAIL: { send: vi.fn(async () => ({ messageId: "x" })) } } as unknown as Env;
 const ctx = { waitUntil: (p: Promise<unknown>) => void p.catch(() => {}), passThroughOnException() {} } as unknown as ExecutionContext;
 
 function fake(rawText: string, from = ME) {
@@ -170,4 +171,30 @@ it("requests a notification for file_too_large and for a failed file store", asy
   await handleEmail(fake(pdfAttached), broken, ctx, undefined, notifyFn);
   expect(notifyFn).toHaveBeenLastCalledWith(broken, "could_not_read", expect.objectContaining({ state: "could_not_read", reason: "unreadable_file" }));
   expect(notifyFn).toHaveBeenCalledTimes(2);
+});
+
+// A notification the tool sent, forwarded back by a wide Gmail rule.
+const notice = (from: string, subject: string) =>
+  `From: Receipt filer <${from}>\r\nTo: owner@example.com\r\nSubject: ${subject}\r\nMessage-ID: <${crypto.randomUUID()}@example.org>\r\nContent-Type: text/plain\r\n\r\nThe receipt could not be read.\r\n`;
+it("drops the tool's own notifications forwarded back, with no row and no notification", async () => {
+  const notifyFn = vi.fn(async () => {});
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  for (const raw of [
+    notice(` ${FORWARD.toUpperCase()} `.trim(), "Receipt filer: Could not read - Acme"),
+    notice("someone@example.com", "Fwd: Re: FW: Receipt filer: Choose a match - Acme"),
+  ]) {
+    const m = fake(raw, "josh+caf_=receipts=example.org@example.com");
+    await handleEmail(m, testEnv, ctx, undefined, notifyFn);
+    expect(m.setReject).not.toHaveBeenCalled();
+  }
+  expect(log).toHaveBeenCalledTimes(2);
+  log.mockRestore();
+  expect(await listReceipts(env.DB)).toHaveLength(0);
+  expect(notifyFn).not.toHaveBeenCalled();
+});
+it("still stores an email whose subject merely contains the word receipt", async () => {
+  const notifyFn = vi.fn(async () => {});
+  await handleEmail(fake(notice("shop@example.com", "Your receipt filer order receipt")), testEnv, ctx, undefined, notifyFn);
+  expect(await listReceipts(env.DB)).toHaveLength(1);
+  expect(notifyFn).toHaveBeenCalledOnce();
 });

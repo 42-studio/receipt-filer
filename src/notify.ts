@@ -5,6 +5,9 @@ export type Kind = "stuck" | "could_not_read" | "needs_choice" | "failed" | "rec
 export type NotifyEnv = Pick<Env, "DB" | "EMAIL" | "NOTIFY_TO" | "FORWARD_ADDRESS" | "APP_URL">;
 export type Notify = (env: NotifyEnv, kind: Kind, receipt?: Receipt) => Promise<void>;
 
+/** Every notification subject starts with this; the email handler drops mail that carries it. */
+export const SUBJECT_PREFIX = "Receipt filer:";
+
 const QUIET_REASONS = new Set(["no_total", "zero_total"]); // newsletters and zero invoices make no noise
 const DAY_MS = 86_400_000;
 
@@ -20,7 +23,7 @@ const WHY: Record<string, string> = {
 
 function compose(kind: Kind, r: Receipt | undefined, appUrl: string): { subject: string; text: string } {
   if (kind === "reconnect") {
-    return { subject: "Receipt filer: reconnect FreeAgent", text: `The FreeAgent connection has stopped working. Reconnect it here:\n${appUrl}\n` };
+    return { subject: `${SUBJECT_PREFIX} reconnect FreeAgent`, text: `The FreeAgent connection has stopped working. Reconnect it here:\n${appUrl}\n` };
   }
   const name = r?.supplier || r?.subject || "a receipt";
   const link = `${appUrl}/receipts/${r?.id}`;
@@ -30,7 +33,7 @@ function compose(kind: Kind, r: Receipt | undefined, appUrl: string): { subject:
     needs_choice: ["Choose a match", "More than one bank transaction fits. Pick the right one."],
     failed: ["Could not file", `FreeAgent rejected the attachment${r?.reason ? `: ${r.reason}` : "."}`],
   }[kind];
-  return { subject: `Receipt filer: ${label} - ${name}`, text: `${why}\n\nReceipt: ${name}\n${link}\n` };
+  return { subject: `${SUBJECT_PREFIX} ${label} - ${name}`, text: `${why}\n\nReceipt: ${name}\n${link}\n` };
 }
 
 /** Sends at most one email per receipt and kind. Never throws; a failed send is retried on the next occasion. */
