@@ -1,0 +1,7 @@
+# Copy to .dev.vars for `wrangler dev`. In production these are Worker secrets: `npx wrangler secret put <NAME>`.
+FORWARD_ADDRESS=receipts-k3v9x2@example.com
+ALLOWED_SENDERS=josh@example.com
+NOTIFY_TO=josh@example.com
+OWNER_EMAIL=owner@example.com
+FREEAGENT_CLIENT_ID=example-client-id
+FREEAGENT_CLIENT_SECRET=example-client-secret

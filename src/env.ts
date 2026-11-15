@@ -2,6 +2,10 @@
 export type Env = Cloudflare.Env & {
   FREEAGENT_CLIENT_ID: string;
   FREEAGENT_CLIENT_SECRET: string;
+  FORWARD_ADDRESS: string; // the forwarding address is a shared secret
+  ALLOWED_SENDERS: string; // comma-separated
+  NOTIFY_TO: string;
+  OWNER_EMAIL: string;
 };
 
 export const CONFIDENCE_AUTO = 0.7;

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, expect, it, vi } from "vitest";
 import { addFile, createReceipt, getReceipt, listEvents } from "../src/db";
+import type { Env } from "../src/env";
 import { readInput, readReceipt } from "../src/read/reader";
 import scanUrl from "./fixtures/scan.pdf?inline";
 import textUrl from "./fixtures/text.pdf?inline";
@@ -53,7 +54,7 @@ function fakes() {
       return t;
     },
   };
-  return { f, env: { ...env, AI: ai, IMAGES: images, EMAIL: { send: async () => ({ messageId: "x" }) } } as unknown as typeof env };
+  return { f, env: { ...env, AI: ai, IMAGES: images, EMAIL: { send: async () => ({ messageId: "x" }) } } as unknown as Env };
 }
 
 let h: ReturnType<typeof fakes>;

@@ -48,6 +48,9 @@ export async function notify(env: NotifyEnv, kind: Kind, receipt?: Receipt, now:
     const sent = kind === "reconnect" ? [] : ((await getReceipt(env.DB, receipt?.id ?? ""))?.notified ?? null);
     if (!sent || sent.includes(kind)) return;
 
+    for (const key of ["NOTIFY_TO", "FORWARD_ADDRESS"] as const) {
+      if (!env[key]?.trim()) return console.error(`notify skipped: the ${key} secret is not set`, kind);
+    }
     const { subject, text } = compose(kind, receipt, env.APP_URL);
     await env.EMAIL.send({ to: env.NOTIFY_TO, from: env.FORWARD_ADDRESS, subject, text });
 

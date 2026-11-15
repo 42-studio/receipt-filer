@@ -4,7 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-15",
   "compatibility_flags": ["nodejs_compat"],
-  // Local dev only: wrangler dev answers ctx.access.getIdentity() with this person. Set OWNER_EMAIL=owner@example.com for dev.
+  // Local dev only: wrangler dev answers ctx.access.getIdentity() with this person. Copy .dev.vars.example to .dev.vars for dev.
   "access": { "dev": { "aud": "dev", "identity": { "email": "owner@example.com" } } },
   "observability": { "enabled": true, "traces": { "enabled": true } },
   "triggers": { "crons": ["*/15 * * * *"] },
@@ -20,13 +20,10 @@
   "ai": { "binding": "AI" },
   "images": { "binding": "IMAGES" },
   "send_email": [{ "name": "EMAIL" }],
+  // FORWARD_ADDRESS, ALLOWED_SENDERS, NOTIFY_TO and OWNER_EMAIL are Worker secrets (wrangler secret put), never vars.
   "vars": {
     "FREEAGENT_BASE_URL": "https://api.sandbox.freeagent.com/v2",
     "CLAIRIC_MODEL": "@cf/cloudflare/clairic",
-    "ALLOWED_SENDERS": "",
-    "NOTIFY_TO": "",
-    "OWNER_EMAIL": "",
-    "FORWARD_ADDRESS": "",
     "APP_URL": "https://receipts.example.com"
   }
 }

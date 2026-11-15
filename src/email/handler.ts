@@ -37,7 +37,7 @@ export async function handleEmail(
   notifyFn: Notify = notify,
 ): Promise<void> {
   if (isGmailForwardingConfirmation(message.from)) return void (await message.forward(env.NOTIFY_TO));
-  if (!isAllowedSender(message.from, env.ALLOWED_SENDERS.split(",").filter((a) => a.trim()))) return message.setReject("Sender not allowed");
+  if (!isAllowedSender(message.from, (env.ALLOWED_SENDERS ?? "").split(",").filter((a) => a.trim()))) return message.setReject("Sender not allowed");
 
   let email;
   try {

@@ -81,3 +81,16 @@ it("keeps every kind when called with the same stale receipt copy", async () => 
   await notify(e, "stuck", r);
   expect(send).toHaveBeenCalledTimes(2);
 });
+
+it("logs which setting is missing and sends nothing when NOTIFY_TO or FORWARD_ADDRESS is blank", async () => {
+  const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  for (const [key, blank] of [["NOTIFY_TO", " "], ["FORWARD_ADDRESS", ""]] as const) {
+    const { e, send } = fakeEnv();
+    const r = await make();
+    await notify({ ...e, [key]: blank }, "could_not_read", r);
+    expect(send).not.toHaveBeenCalled();
+    expect(err.mock.calls.some((c) => String(c[0]).includes(key))).toBe(true);
+    expect((await getReceipt(env.DB, r.id))!.notified).toEqual([]);
+  }
+  err.mockRestore();
+});

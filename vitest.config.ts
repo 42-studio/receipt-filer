@@ -9,7 +9,16 @@ export default defineConfig({
         wrangler: { configPath: "./wrangler.jsonc" },
         // AI/IMAGES/EMAIL bindings stay local; tests pass fakes instead of calling out.
         remoteBindings: false,
-        miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
+        // The secrets, with example values; tests that need others set them on their own env.
+        miniflare: {
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            FORWARD_ADDRESS: "receipts-k3v9x2@example.com",
+            ALLOWED_SENDERS: "josh@example.com",
+            NOTIFY_TO: "owner@example.com",
+            OWNER_EMAIL: "owner@example.com",
+          },
+        },
       };
     }),
   ],

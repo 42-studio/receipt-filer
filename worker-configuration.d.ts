@@ -9,10 +9,6 @@ interface __BaseEnv_Env {
 	IMAGES: ImagesBinding;
 	FREEAGENT_BASE_URL: "https://api.sandbox.freeagent.com/v2";
 	CLAIRIC_MODEL: "@cf/cloudflare/clairic";
-	ALLOWED_SENDERS: "";
-	NOTIFY_TO: "";
-	OWNER_EMAIL: "";
-	FORWARD_ADDRESS: "";
 	APP_URL: "https://receipts.example.com";
 }
 declare namespace Cloudflare {
@@ -26,7 +22,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "FREEAGENT_BASE_URL" | "CLAIRIC_MODEL" | "ALLOWED_SENDERS" | "NOTIFY_TO" | "OWNER_EMAIL" | "FORWARD_ADDRESS" | "APP_URL">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "FREEAGENT_BASE_URL" | "CLAIRIC_MODEL" | "APP_URL">> {}
 }
 declare module "*.txt" {
 	const value: string;
