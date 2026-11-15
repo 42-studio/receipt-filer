@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "receipt-filer",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "traces": { "enabled": true } },
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "receipt-filer",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "receipt-filer-files" }],
+  "ai": { "binding": "AI" },
+  "images": { "binding": "IMAGES" },
+  "send_email": [{ "name": "EMAIL" }],
+  "vars": {
+    "FREEAGENT_BASE_URL": "https://api.sandbox.freeagent.com/v2",
+    "CLAIRIC_MODEL": "@cf/cloudflare/clairic",
+    "ALLOWED_SENDERS": "",
+    "NOTIFY_TO": "",
+    "OWNER_EMAIL": "",
+    "FORWARD_ADDRESS": ""
+  }
+}
