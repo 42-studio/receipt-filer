@@ -6,3 +6,7 @@ Cloudflare Worker that attaches emailed receipts to FreeAgent bank transaction e
 - `npm run types` regenerates `worker-configuration.d.ts` after editing `wrangler.jsonc`.
 - `wrangler.jsonc` holds placeholder D1 and R2 ids. Create the real resources before the first deploy.
 - Secrets `FREEAGENT_CLIENT_ID` and `FREEAGENT_CLIENT_SECRET` are Worker secrets (`wrangler secret put`), never committed.
+
+## Exchange rates
+
+`src/match/fx.ts` reads daily rates from Frankfurter: `GET https://api.frankfurter.dev/v1/<day>?base=<CUR>&symbols=GBP`. It is free and needs no account or key. Checked 2026-11-15: `.../v1/2026-11-09?base=USD&symbols=GBP` returns `{"amount":1.0,"base":"USD","date":"2026-11-09","rates":{"GBP":0.74538}}`. For a weekend date it returns the nearest earlier business day (`.../v1/2026-11-08?base=EUR&symbols=GBP` returns `"date":"2026-11-06"`). Rates are cached in the `rates` table under the requested day.
