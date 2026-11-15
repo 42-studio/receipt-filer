@@ -4,6 +4,8 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-15",
   "compatibility_flags": ["nodejs_compat"],
+  // Local dev only: wrangler dev answers ctx.access.getIdentity() with this person. Set OWNER_EMAIL=owner@example.com for dev.
+  "access": { "dev": { "aud": "dev", "identity": { "email": "owner@example.com" } } },
   "observability": { "enabled": true, "traces": { "enabled": true } },
   "triggers": { "crons": ["*/15 * * * *"] },
   "d1_databases": [
