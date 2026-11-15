@@ -1,7 +1,7 @@
 import { addEvent, claimForAttach, getReceipt, listFiles, listOpen, pin, releaseClaim, unpin, updateReceipt, usedLines, type Receipt, type State } from "../db";
 import { LOOKBACK_DAYS, STUCK_AFTER_DAYS, type Env } from "../env";
 import * as freeagent from "../freeagent/client";
-import { FreeAgentAuthError, FreeAgentUnavailable, type BankLine } from "../freeagent/client";
+import { AttachUnconfirmed, FreeAgentAuthError, FreeAgentUnavailable, type BankLine } from "../freeagent/client";
 import { notify } from "../notify";
 import { readReceipt } from "../read/reader";
 import { decide, type Decision } from "./matcher";
@@ -19,6 +19,7 @@ export interface Deps {
 }
 
 const DAY_MS = 86_400_000;
+export const UNCONFIRMED = "FreeAgent did not confirm the attachment. Check the transaction in FreeAgent before you press Retry.";
 const NEEDS_CONVERSION = new Set(["image/webp", "image/heic", "image/heif"]); // FreeAgent takes only PNG, JPEG, GIF, PDF
 
 /** Converts WebP and HEIC/HEIF to JPEG; every other file passes through unchanged. */
@@ -66,6 +67,12 @@ export async function runMatcher(env: Env, partial: Partial<Deps> = {}, onlyRece
       }
       urls = await d.fa.attach(env, explanation, files);
     } catch (e) {
+      if (e instanceof AttachUnconfirmed) {
+        // The claim stays held: FreeAgent may have saved the files, so only Josh can send them again (Retry or Match).
+        const saved = e.attachmentUrls.length ? ` Saved before the failure: ${e.attachmentUrls.join(", ")}` : "";
+        await setState(r, "failed", UNCONFIRMED, `${e.message}.${saved}`);
+        return note("failed", { ...r, state: "failed", reason: UNCONFIRMED });
+      }
       await releaseClaim(env.DB, r.id);
       if (isDown(e)) throw e;
       const message = e instanceof Error ? e.message : String(e);

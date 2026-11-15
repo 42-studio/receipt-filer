@@ -376,3 +376,19 @@ it("the OAuth callback rejects a wrong state", async () => {
   expect((await fresh("/oauth/callback?code=abc&state=")).status).toBe(400); // nothing stored to match
   expect(await getSetting(env.DB, "freeagent_tokens")).toBeNull();
 });
+
+it("retry and match on a failed receipt release a held claim, and the page shows the reason", async () => {
+  const reason = "FreeAgent did not confirm the attachment. Check the transaction in FreeAgent before you press Retry.";
+  const { call, f } = setup([line(1)]);
+  for (const action of ["retry", "match"] as const) {
+    const r = await make({ state: "failed", reason });
+    await env.DB.prepare("UPDATE receipts SET attach_claimed_at = ? WHERE id = ?").bind(NOW.toISOString(), r.id).run();
+    if (action === "retry") await pin(env.DB, r.id, line(1).url, "auto");
+    expect(await (await call(`/receipts/${r.id}`)).text()).toContain(reason);
+    const res = await call(`/receipts/${r.id}/${action}`, { method: "POST", ...(action === "match" ? { form: { line: line(1).url } } : {}) });
+    expect(res.status).toBe(303);
+    expect((await get(r.id)).state).toBe("filed");
+    await env.DB.prepare("DELETE FROM receipts").run(); // frees line 1 for the next action
+  }
+  expect(f.attached).toHaveLength(2);
+});

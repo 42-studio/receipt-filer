@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getSetting, setSetting } from "../src/db";
 import type { Env } from "../src/env";
 import {
-  FreeAgentAuthError, FreeAgentUnavailable, attach, authoriseUrl, exchangeCode, getBankLine, isConnected, listBankLines, pickExplanation,
+  AttachUnconfirmed, FreeAgentAuthError, FreeAgentUnavailable, attach, authoriseUrl, exchangeCode, getBankLine, isConnected, listBankLines, pickExplanation,
   type BankLine,
 } from "../src/freeagent/client";
 
@@ -239,4 +239,35 @@ it("refuses URLs outside the FreeAgent base URL without sending a request", asyn
   await expect(getBankLine(env, `${BASE}.evil.test/x`)).rejects.toThrow(/outside/);
   await expect(attach(env, "https://evil.test/v2/x", files(1))).rejects.toThrow(/outside/);
   expect(seen).toHaveLength(0);
+});
+
+it.each([["500", () => json({}, 500)], ["network failure", () => { throw new TypeError("boom"); }]])(
+  "throws AttachUnconfirmed when the attach POST gets %s", async (_n, h) => {
+    await seedTokens();
+    handler = h as typeof handler;
+    const e = await attach(env, `${BASE}/bank_transactions/7`, files(1)).catch((x) => x);
+    expect(e).toBeInstanceOf(AttachUnconfirmed);
+    expect(e.attachmentUrls).toEqual([]);
+  });
+
+it("keeps FreeAgentUnavailable for a 429 on the attach POST and for a failure before the POST", async () => {
+  await seedTokens();
+  handler = () => json({}, 429);
+  await expect(attach(env, `${BASE}/bank_transactions/7`, files(1))).rejects.toSatisfy((e) => e instanceof FreeAgentUnavailable && !(e instanceof AttachUnconfirmed));
+  await seedTokens({ expires_at: 0 });
+  seen = [];
+  handler = (r) => (r.url === TOKEN_URL ? json({}, 503) : json({ attachments: [{ url: "u" }] }, 201));
+  await expect(attach(env, `${BASE}/bank_transactions/7`, files(1))).rejects.toBeInstanceOf(FreeAgentUnavailable);
+  expect(seen.some((s) => s.method === "POST" && s.url.endsWith("/attachments"))).toBe(false);
+});
+
+it("throws AttachUnconfirmed with the saved URLs when a later batch fails in any way", async () => {
+  await seedTokens();
+  for (const second of [() => json({}, 422), () => json({}, 429), () => json({}, 502)]) {
+    let n = 0;
+    handler = (r) => (n++ === 0 ? json({ attachments: JSON.parse(r.body).attachments.map((_: unknown, i: number) => ({ url: `${BASE}/attachments/${i}` })) }, 201) : second());
+    const e = await attach(env, `${BASE}/bank_transactions/7`, files(12)).catch((x) => x);
+    expect(e).toBeInstanceOf(AttachUnconfirmed);
+    expect(e.attachmentUrls).toHaveLength(10);
+  }
 });

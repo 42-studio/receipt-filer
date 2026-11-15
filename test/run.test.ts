@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, expect, it, vi } from "vitest";
 import { addFile, createReceipt, getReceipt, listEvents, listFiles, pin, updateReceipt, type Receipt } from "../src/db";
 import type { Env } from "../src/env";
-import { FreeAgentAuthError, FreeAgentUnavailable, pickExplanation, type BankLine } from "../src/freeagent/client";
+import { AttachUnconfirmed, FreeAgentAuthError, FreeAgentUnavailable, pickExplanation, type BankLine } from "../src/freeagent/client";
 import { runMatcher } from "../src/match/run";
 
 const E = env as unknown as Env;
@@ -277,4 +277,29 @@ it("keeps the claim and does not fail the receipt when the write after a success
   expect(notify.mock.calls.filter((c: any[]) => c[1] === "failed")).toHaveLength(0);
   const claim = await env.DB.prepare("SELECT attach_claimed_at FROM receipts WHERE id = ?").bind(r.id).first<{ attach_claimed_at: string | null }>();
   expect(claim!.attach_claimed_at).not.toBeNull();
+});
+
+const UNCONFIRMED = "FreeAgent did not confirm the attachment. Check the transaction in FreeAgent before you press Retry.";
+const claimOf = async (id: string) => (await env.DB.prepare("SELECT attach_claimed_at FROM receipts WHERE id = ?").bind(id).first<{ attach_claimed_at: string | null }>())!.attach_claimed_at;
+
+it("marks failed, keeps the claim and never retries on its own when an attach is unconfirmed", async () => {
+  const r = await make();
+  const { f, deps, notify } = fakes();
+  f.attachError = new AttachUnconfirmed("FreeAgent 502", []);
+  await runMatcher(E, deps);
+  await runMatcher(E, deps);
+  expect(f.attachCalls).toHaveLength(1);
+  expect(await get(r.id)).toMatchObject({ state: "failed", reason: UNCONFIRMED, attachmentUrls: null });
+  expect(await claimOf(r.id)).not.toBeNull();
+  expect(notify).toHaveBeenCalledWith(env, "failed", expect.objectContaining({ id: r.id, reason: UNCONFIRMED }), deps.now);
+});
+
+it("records the URLs of a batch that was saved before the failure and does not upload it again", async () => {
+  const r = await make({}, 12);
+  const { f, deps } = fakes();
+  f.attachError = new AttachUnconfirmed("FreeAgent 502", ["https://fa.test/attachments/1", "https://fa.test/attachments/2"]);
+  await runMatcher(E, deps);
+  await runMatcher(E, deps);
+  expect(f.attachCalls).toHaveLength(1);
+  expect((await listEvents(env.DB, r.id)).map((e) => e.message).join("\n")).toContain("https://fa.test/attachments/2");
 });

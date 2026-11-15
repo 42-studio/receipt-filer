@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { html } from "hono/html";
-import { addEvent, deleteReceipt, getReceipt, getSetting, listEvents, listFiles, listReceipts, pin, unpin, updateReceipt, usedLines, type Receipt, type State } from "../db";
+import { addEvent, deleteReceipt, getReceipt, getSetting, listEvents, listFiles, listReceipts, pin, releaseClaim, unpin, updateReceipt, usedLines, type Receipt, type State } from "../db";
 import { MANUAL_MATCH_DAYS, type Env } from "../env";
 import * as freeagent from "../freeagent/client";
 import { FreeAgentAuthError, FreeAgentUnavailable, type BankLine } from "../freeagent/client";
@@ -310,6 +310,7 @@ export function createApp(partial: Partial<AppDeps> = {}) {
     const url = typeof raw === "string" ? ownLine(c.env, raw) : null;
     if (!url || !(await d.fa.getBankLine(c.env, url))) return message(c, 400, "That is not a bank transaction in FreeAgent.");
     if (!(await pin(c.env.DB, r.id, url, "manual"))) return message(c, 409, "Another receipt already holds that bank line.");
+    if (r.state === "failed") await releaseClaim(c.env.DB, r.id); // an unconfirmed attach keeps it held; Josh has checked FreeAgent
     await updateReceipt(c.env.DB, r.id, { state: "waiting_payment", reason: null }); // the matcher acts on a pinned receipt in this state
     await addEvent(c.env.DB, r.id, `Matched by hand to bank line ${url}`);
     await d.runMatcher(c.env, r.id);
@@ -320,6 +321,7 @@ export function createApp(partial: Partial<AppDeps> = {}) {
     const r = await guard(c, "retry");
     if (r instanceof Response) return r;
     if (r.pinnedBy === "auto") await unpin(c.env.DB, r.id); // a manual pin stays
+    if (r.state === "failed") await releaseClaim(c.env.DB, r.id); // an unconfirmed attach keeps it held; Josh has checked FreeAgent
     await updateReceipt(c.env.DB, r.id, { state: "reading", reason: null, supplier: null, totalMinor: null, currency: null, receiptDate: null, confidence: null, inputKind: null });
     await addEvent(c.env.DB, r.id, "Retry requested");
     await d.read(c.env, r.id);

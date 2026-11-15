@@ -2,8 +2,14 @@ import { getSetting, setSetting } from "../db";
 import { ATTACH_BATCH, type Env } from "../env";
 
 export interface BankLine { url: string; datedOn: string; amountMinor: number; description: string; explanations: { url: string; grossMinor: number }[]; }
-/** Network error, 429 or 5xx: try again later. */
-export class FreeAgentUnavailable extends Error {}
+/** Network error, 429 or 5xx: try again later. `url` is the request that failed; `status` is absent for a network error. */
+export class FreeAgentUnavailable extends Error {
+  constructor(message: string, readonly url?: string, readonly status?: number) { super(message); }
+}
+/** An attach POST was sent but its outcome is unknown, so FreeAgent may have saved files. Never retry on its own. */
+export class AttachUnconfirmed extends Error {
+  constructor(message: string, readonly attachmentUrls: string[]) { super(message); }
+}
 /** Not connected or the refresh was refused: Josh must sign in again. */
 export class FreeAgentAuthError extends Error {}
 
@@ -22,9 +28,9 @@ async function send(url: string, init: RequestInit): Promise<Response> {
   try {
     res = await fetch(url, { ...init, headers: { ...HEADERS, ...init.headers } });
   } catch (e) {
-    throw new FreeAgentUnavailable(`FreeAgent unreachable: ${e}`);
+    throw new FreeAgentUnavailable(`FreeAgent unreachable: ${e}`, url);
   }
-  if (res.status === 429 || res.status >= 500) throw new FreeAgentUnavailable(`FreeAgent ${res.status}: ${await res.text()}`);
+  if (res.status === 429 || res.status >= 500) throw new FreeAgentUnavailable(`FreeAgent ${res.status}: ${await res.text()}`, url, res.status);
   return res;
 }
 
@@ -139,12 +145,25 @@ function base64(bytes: Uint8Array): string {
 
 export async function attach(env: Env, explanationUrl: string, files: { filename: string; contentType: string; data: Uint8Array }[]): Promise<string[]> {
   own(env, explanationUrl);
+  const post = `${explanationUrl}/attachments`;
   const urls: string[] = [];
+  const unconfirmed = (e: unknown) => new AttachUnconfirmed(`FreeAgent did not confirm the attachment: ${e instanceof Error ? e.message : String(e)}`, [...urls]);
   for (let i = 0; i < files.length; i += ATTACH_BATCH) {
     const attachments = files.slice(i, i + ATTACH_BATCH).map((f) => ({ data: base64(f.data), file_name: f.filename, content_type: f.contentType, description: f.filename }));
-    const res = await api(env, `${explanationUrl}/attachments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attachments }) });
-    if (!res.ok) await fail(res);
-    urls.push(...((await res.json()) as { attachments: { url: string }[] }).attachments.map((a) => a.url));
+    let res: Response;
+    try {
+      res = await api(env, post, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attachments }) });
+    } catch (e) {
+      // Nothing is saved when the POST was never sent (token, auth) or got a 429; a network error or 5xx on the POST may have saved it.
+      const unknown = e instanceof FreeAgentUnavailable && e.url === post && e.status !== 429;
+      throw urls.length || unknown ? unconfirmed(e) : e;
+    }
+    if (!res.ok) await fail(res).catch((e) => { throw urls.length ? unconfirmed(e) : e; });
+    try {
+      urls.push(...((await res.json()) as { attachments: { url: string }[] }).attachments.map((a) => a.url));
+    } catch (e) {
+      throw unconfirmed(e); // a 2xx whose body cannot be read: the files are probably saved
+    }
   }
   return urls;
 }
