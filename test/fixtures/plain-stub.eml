@@ -1,0 +1,17 @@
+From: Pixelgrove <billing@pixelgrove.example>
+To: receipts@studio42.example
+Subject: Your receipt from Pixelgrove
+Date: Thu, 12 Nov 2026 09:14:00 +0000
+Message-ID: <Your-receipt-from-Pixelgrove@pixelgrove.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="BOUNDARY42"
+
+--BOUNDARY42
+Content-Type: text/plain; charset=utf-8
+
+Your email client does not support HTML
+--BOUNDARY42
+Content-Type: text/html; charset=utf-8
+
+<p>Receipt #8841</p><p>Total paid: £14.00</p>
+--BOUNDARY42--
