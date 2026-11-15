@@ -179,18 +179,18 @@ it("attaches in batches of ten and returns every attachment URL", async () => {
   await seedTokens();
   let k = 0;
   handler = (r) => json({ attachments: JSON.parse(r.body).attachments.map(() => ({ url: `${BASE}/attachments/${k++}` })) }, 201);
-  const urls = await attach(env, "https://fa/bte/7", files(12));
+  const urls = await attach(env, `${BASE}/bank_transactions/7`, files(12));
   const posts = seen.map((s) => ({ url: s.url, body: JSON.parse(s.body) }));
   expect(posts.map((p) => p.body.attachments.length)).toEqual([10, 2]);
   expect(urls).toHaveLength(12);
-  expect(posts[0].url).toBe("https://fa/bte/7/attachments");
+  expect(posts[0].url).toBe(`${BASE}/bank_transactions/7/attachments`);
   expect(posts[0].body.attachments[1]).toMatchObject({ data: btoa("\x01\x01\x02"), file_name: "f1.pdf", content_type: "application/pdf" });
 });
 
 it("throws an Error carrying the status and FreeAgent's message when attach is refused", async () => {
   await seedTokens();
   handler = () => json({ errors: { error: { message: "File too large" } } }, 422);
-  await expect(attach(env, "https://fa/bte/7", files(1))).rejects.toThrow(/422.*File too large/);
+  await expect(attach(env, `${BASE}/bank_transactions/7`, files(1))).rejects.toThrow(/422.*File too large/);
 });
 
 it("never sends anything but attachments in a write", async () => {
@@ -200,7 +200,7 @@ it("never sends anything but attachments in a write", async () => {
     : r.method === "POST" ? json({ attachments: [{ url: "u" }] }, 201) : json({ bank_accounts: [], bank_transaction: tx(1) });
   await listBankLines(env, "2026-11-01");
   await getBankLine(env, `${BASE}/bank_transactions/1`);
-  await attach(env, "https://fa/bte/7", files(1));
+  await attach(env, `${BASE}/bank_transactions/7`, files(1));
   const writes = seen.filter((s) => s.method !== "GET");
   expect(writes.length).toBeGreaterThan(0);
   for (const w of writes) expect(w.url === TOKEN_URL || w.url.endsWith("/attachments")).toBe(true);
@@ -213,3 +213,30 @@ it.each([
   [[{ url: "a", grossMinor: -2000 }, { url: "b", grossMinor: -3000 }], 2000, "a"],
   [[], 2000, null],
 ])("picks the explanation", (ex, total, want) => expect(pickExplanation({ ...line, explanations: ex }, total)).toBe(want));
+
+it("fails loudly when a list call returns 404", async () => {
+  await seedTokens();
+  handler = () => json({}, 404);
+  await expect(listBankLines(env, "2026-11-01")).rejects.toThrow(/404/);
+  handler = (r) => (r.url.endsWith("/bank_accounts") ? json({ bank_accounts: [{ url: `${BASE}/bank_accounts/1`, status: "active" }] }) : json({}, 404));
+  await expect(listBankLines(env, "2026-11-01")).rejects.toThrow(/404/);
+});
+
+it("uses the stored tokens when a refused refresh was only a rotation by another isolate", async () => {
+  await seedTokens({ expires_at: 0 });
+  handler = async (r) => {
+    if (r.url !== TOKEN_URL) return json({ bank_transaction: tx(1) });
+    await seedTokens({ access_token: "a9", refresh_token: "r9" });
+    return json({ error: "invalid_grant" }, 400);
+  };
+  expect(await getBankLine(env, `${BASE}/bank_transactions/1`)).not.toBeNull();
+  expect(seen[seen.length - 1].headers.get("authorization")).toBe("Bearer a9");
+});
+
+it("refuses URLs outside the FreeAgent base URL without sending a request", async () => {
+  await seedTokens();
+  await expect(getBankLine(env, "https://evil.test/v2/bank_transactions/1")).rejects.toThrow(/outside/);
+  await expect(getBankLine(env, `${BASE}.evil.test/x`)).rejects.toThrow(/outside/);
+  await expect(attach(env, "https://evil.test/v2/x", files(1))).rejects.toThrow(/outside/);
+  expect(seen).toHaveLength(0);
+});

@@ -60,7 +60,15 @@ function refresh(env: Env, used: Tokens): Promise<Tokens> {
     const stored = await readTokens(env);
     if (!stored) throw new FreeAgentAuthError("FreeAgent is not connected");
     if (stored.refresh_token !== used.refresh_token) return stored;
-    await tokenCall(env, { grant_type: "refresh_token", refresh_token: used.refresh_token });
+    try {
+      await tokenCall(env, { grant_type: "refresh_token", refresh_token: used.refresh_token });
+    } catch (e) {
+      if (!(e instanceof FreeAgentAuthError)) throw e;
+      // A refusal can mean another isolate rotated the token a moment ago: use its tokens.
+      const now = await readTokens(env);
+      if (now && now.refresh_token !== used.refresh_token) return now;
+      throw e;
+    }
     return (await readTokens(env))!;
   })().finally(() => (inflight = null));
   return inflight;
@@ -84,10 +92,15 @@ async function api(env: Env, url: string, init: RequestInit = {}): Promise<Respo
 }
 
 const fail = async (res: Response): Promise<never> => { throw new Error(`FreeAgent ${res.status}: ${await res.text()}`); };
-const getJson = async <T>(env: Env, url: string): Promise<T | null> => {
+const getJson = async <T>(env: Env, url: string): Promise<T> => {
   const res = await api(env, url);
-  if (res.status === 404) return null;
   return res.ok ? ((await res.json()) as T) : fail(res);
+};
+
+// Never send the bearer token to a URL that is not under the FreeAgent base URL.
+const own = (env: Env, url: string) => {
+  if (!url.startsWith(`${env.FREEAGENT_BASE_URL}/`)) throw new Error(`Refusing URL outside FreeAgent: ${url}`);
+  return url;
 };
 
 const minor = (s: string) => Math.round(parseFloat(s) * 100) || 0; // `|| 0` turns -0 into 0
@@ -98,12 +111,12 @@ const toLine = (t: RawTx): BankLine => ({
 });
 
 export async function listBankLines(env: Env, fromDate: string): Promise<BankLine[]> {
-  const accounts = (await getJson<{ bank_accounts: { url: string; status: string }[] }>(env, `${env.FREEAGENT_BASE_URL}/bank_accounts`))?.bank_accounts ?? [];
+  const accounts = (await getJson<{ bank_accounts: { url: string; status: string }[] }>(env, `${env.FREEAGENT_BASE_URL}/bank_accounts`)).bank_accounts;
   const lines: BankLine[] = [];
   for (const a of accounts.filter((a) => a.status === "active")) {
     for (let page = 1; ; page++) {
       const q = new URLSearchParams({ bank_account: a.url, from_date: fromDate, per_page: "100", page: String(page) });
-      const txs = (await getJson<{ bank_transactions: RawTx[] }>(env, `${env.FREEAGENT_BASE_URL}/bank_transactions?${q}`))?.bank_transactions ?? [];
+      const txs = (await getJson<{ bank_transactions: RawTx[] }>(env, `${env.FREEAGENT_BASE_URL}/bank_transactions?${q}`)).bank_transactions;
       lines.push(...txs.map(toLine));
       if (txs.length < 100) break;
     }
@@ -112,8 +125,10 @@ export async function listBankLines(env: Env, fromDate: string): Promise<BankLin
 }
 
 export async function getBankLine(env: Env, url: string): Promise<BankLine | null> {
-  const r = await getJson<{ bank_transaction: RawTx }>(env, url);
-  return r ? toLine(r.bank_transaction) : null;
+  const res = await api(env, own(env, url));
+  if (res.status === 404) return null;
+  if (!res.ok) await fail(res);
+  return toLine(((await res.json()) as { bank_transaction: RawTx }).bank_transaction);
 }
 
 function base64(bytes: Uint8Array): string {
@@ -123,6 +138,7 @@ function base64(bytes: Uint8Array): string {
 }
 
 export async function attach(env: Env, explanationUrl: string, files: { filename: string; contentType: string; data: Uint8Array }[]): Promise<string[]> {
+  own(env, explanationUrl);
   const urls: string[] = [];
   for (let i = 0; i < files.length; i += ATTACH_BATCH) {
     const attachments = files.slice(i, i + ATTACH_BATCH).map((f) => ({ data: base64(f.data), file_name: f.filename, content_type: f.contentType, description: f.filename }));

@@ -10,9 +10,10 @@ const tokens = (globalThis as { process?: { env?: Record<string, string> } }).pr
 const env = workerEnv as unknown as Env;
 
 it.skipIf(!tokens)("uploads a bank line, lists it with one explanation and attaches a file", async () => {
+  const base = env.FREEAGENT_BASE_URL;
+  expect(base).toContain("sandbox"); // this test writes to FreeAgent: never run it against the live API
   await setSetting(env.DB, "freeagent_tokens", tokens!);
   const { access_token } = JSON.parse(tokens!);
-  const base = env.FREEAGENT_BASE_URL;
   const call = async (path: string, method = "GET", body?: unknown) => {
     const r = await fetch(path.startsWith("http") ? path : base + path, {
       method, body: body ? JSON.stringify(body) : undefined,
