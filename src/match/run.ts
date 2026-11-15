@@ -56,6 +56,7 @@ export async function runMatcher(env: Env, partial: Partial<Deps> = {}, onlyRece
     }
     if (!(await claimForAttach(env.DB, r.id))) return; // another run holds it, or it is already filed
     const rows = await listFiles(env.DB, r.id);
+    let urls: string[];
     try {
       const files: AttachFile[] = [];
       for (const f of rows) {
@@ -63,16 +64,22 @@ export async function runMatcher(env: Env, partial: Partial<Deps> = {}, onlyRece
         if (!obj) throw new Error(`File ${f.filename} is missing from storage`);
         files.push(await d.convert(env, { filename: f.filename, contentType: f.contentType, data: new Uint8Array(await obj.arrayBuffer()) }));
       }
-      const urls = await d.fa.attach(env, explanation, files);
-      // attachmentUrls is set first and in one write with the state: it is what stops a second attach.
-      await updateReceipt(env.DB, r.id, { state: "filed", reason: null, explanationUrl: explanation, attachmentUrls: urls, filedAt: d.now().toISOString(), body: null });
-      await addEvent(env.DB, r.id, `Attached ${urls.length} file(s) to FreeAgent`);
+      urls = await d.fa.attach(env, explanation, files);
     } catch (e) {
       await releaseClaim(env.DB, r.id);
       if (isDown(e)) throw e;
       const message = e instanceof Error ? e.message : String(e);
       await setState(r, "failed", message, `FreeAgent refused the attachment: ${message}`);
       return note("failed", { ...r, state: "failed", reason: message });
+    }
+    try {
+      // attachmentUrls is set first and in one write with the state: it is what stops a second attach.
+      await updateReceipt(env.DB, r.id, { state: "filed", reason: null, explanationUrl: explanation, attachmentUrls: urls, filedAt: d.now().toISOString(), body: null });
+      await addEvent(env.DB, r.id, `Attached ${urls.length} file(s) to FreeAgent`);
+    } catch (e) {
+      // shortcut: the claim stays held so nothing attaches twice; the receipt stays unfiled in the UI until someone looks.
+      console.error("attached but could not record it", r.id, urls, e);
+      return;
     }
     try {
       await env.FILES.delete(rows.map((f) => f.r2Key)); // rows stay as history and for duplicate checks

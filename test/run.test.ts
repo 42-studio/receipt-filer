@@ -226,3 +226,22 @@ it("converts a WebP file to JPEG before attaching, and passes other types throug
   expect(f.attachCalls[0].files.map((x) => [x.filename, x.contentType])).toEqual([["a.jpg", "image/jpeg"], ["b.png", "image/png"]]);
   expect([...f.attachCalls[0].files[0].data]).toEqual([0xff, 0xd8]);
 });
+
+it("keeps the claim and does not fail the receipt when the write after a successful attach throws", async () => {
+  const r = await make();
+  const { f, deps, notify } = fakes();
+  await env.DB.prepare("CREATE TRIGGER no_filed BEFORE UPDATE ON receipts WHEN NEW.state = 'filed' BEGIN SELECT RAISE(ABORT, 'boom'); END").run();
+  const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await runMatcher(E, deps);
+    await runMatcher(E, deps);
+  } finally {
+    spy.mockRestore();
+    await env.DB.prepare("DROP TRIGGER no_filed").run();
+  }
+  expect(f.attachCalls).toHaveLength(1);
+  expect((await get(r.id)).state).not.toBe("failed");
+  expect(notify.mock.calls.filter((c: any[]) => c[1] === "failed")).toHaveLength(0);
+  const claim = await env.DB.prepare("SELECT attach_claimed_at FROM receipts WHERE id = ?").bind(r.id).first<{ attach_claimed_at: string | null }>();
+  expect(claim!.attach_claimed_at).not.toBeNull();
+});
