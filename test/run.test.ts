@@ -195,12 +195,45 @@ it("sends one stuck notice after 14 days and keeps the receipt", async () => {
 
 it("runs for one receipt when given its id", async () => {
   const a = await make();
-  const b = await make({ totalMinor: 2400 });
-  const { f, deps } = fakes([line(1)]);
+  const b = await make({ totalMinor: 3000, confidence: 0.5 }); // would go to needs_choice if it were run
+  const { f, deps } = fakes([line(1), line(2, { amountMinor: -3000 })]);
   await runMatcher(E, deps, a.id);
   expect((await get(a.id)).state).toBe("filed");
   expect(await get(b.id)).toMatchObject({ state: "waiting_payment", pinnedLine: null });
   expect(f.attachCalls).toHaveLength(1);
+});
+
+it("pins neither of two same-amount receipts that fit one line", async () => {
+  const older = await make({ receiptDate: "2026-11-12" });
+  const newer = await make({ receiptDate: "2026-11-13" });
+  const { f, deps, notify } = fakes([line(1)]);
+  await runMatcher(E, deps);
+  for (const r of [older, newer]) {
+    expect(await get(r.id)).toMatchObject({ state: "needs_choice", pinnedLine: null });
+    expect((await listEvents(env.DB, r.id)).map((e) => e.message).join("\n")).toContain("Another receipt also fits this bank line");
+  }
+  expect(f.attachCalls).toHaveLength(0);
+  expect(notify.mock.calls.filter((c: any[]) => c[1] === "needs_choice")).toHaveLength(2);
+});
+
+it("files two same-amount receipts when each fits only its own line", async () => {
+  const a = await make({ receiptDate: "2026-10-20" });
+  const b = await make({ receiptDate: "2026-11-14" });
+  const { f, deps } = fakes([line(1, { datedOn: "2026-10-21" }), line(2, { datedOn: "2026-11-14" })]);
+  await runMatcher(E, deps);
+  expect(await get(a.id)).toMatchObject({ state: "filed", pinnedLine: line(1).url });
+  expect(await get(b.id)).toMatchObject({ state: "filed", pinnedLine: line(2).url });
+  expect(f.attachCalls).toHaveLength(2);
+});
+
+it("a run for one receipt sees another receipt's claim on the line and changes only its own receipt", async () => {
+  const a = await make();
+  const b = await make();
+  const { f, deps } = fakes([line(1)]);
+  await runMatcher(E, deps, a.id);
+  expect(await get(a.id)).toMatchObject({ state: "needs_choice", pinnedLine: null });
+  expect(await get(b.id)).toMatchObject({ state: "waiting_payment", pinnedLine: null });
+  expect(f.attachCalls).toHaveLength(0);
 });
 
 it("carries on with the other receipts when one throws", async () => {

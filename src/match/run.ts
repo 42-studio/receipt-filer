@@ -4,7 +4,7 @@ import * as freeagent from "../freeagent/client";
 import { FreeAgentAuthError, FreeAgentUnavailable, type BankLine } from "../freeagent/client";
 import { notify } from "../notify";
 import { readReceipt } from "../read/reader";
-import { decide } from "./matcher";
+import { decide, type Decision } from "./matcher";
 import { rateToGbp } from "./fx";
 
 type AttachFile = { filename: string; contentType: string; data: Uint8Array };
@@ -88,7 +88,7 @@ export async function runMatcher(env: Env, partial: Partial<Deps> = {}, onlyRece
     }
   };
 
-  const handle = async (r: Receipt, lines: BankLine[] | null, used: Set<string>) => {
+  const handle = async (r: Receipt, decision: Decision | undefined, contested: (url: string) => boolean) => {
     if (r.pinnedLine) {
       const line = await d.fa.getBankLine(env, r.pinnedLine);
       if (!line) {
@@ -97,20 +97,18 @@ export async function runMatcher(env: Env, partial: Partial<Deps> = {}, onlyRece
       }
       return file(r, line);
     }
-    if (!lines || r.totalMinor === null || !r.currency) return; // FreeAgent could not be listed, or the receipt has no reading
-    const day = dateOf(r);
-    const rate = r.currency === "GBP" ? 1 : await d.rate(env, day, r.currency);
-    const decision = decide(
-      { totalMinor: r.totalMinor, currency: r.currency, date: day, supplier: r.supplier, confidence: r.confidence ?? 0, inputKind: r.inputKind ?? "text" },
-      lines, used, rate,
-    );
+    if (!decision) return; // FreeAgent could not be listed, or the receipt has no reading
+    if (decision.kind === "match" && contested(decision.line.url)) {
+      if (r.state === "needs_choice") return;
+      await setState(r, "needs_choice", null, `Another receipt also fits this bank line (${decision.line.url}); choose one`);
+      return note("needs_choice", { ...r, state: "needs_choice", reason: null });
+    }
     if (decision.kind === "match") {
       if (await pin(env.DB, r.id, decision.line.url, "auto")) {
-        used.add(decision.line.url);
         await addEvent(env.DB, r.id, `Matched to bank line ${decision.line.url}`);
         return file({ ...r, pinnedLine: decision.line.url }, decision.line);
       }
-      used.add(decision.line.url); // another receipt took it first
+      // another run took the line first
     }
     if (decision.kind === "choice") {
       if (r.state === "needs_choice") return;
@@ -126,18 +124,40 @@ export async function runMatcher(env: Env, partial: Partial<Deps> = {}, onlyRece
       try { await d.read(env, r.id, d.now, d.notify); } catch (e) { console.error("read failed", r.id, e); }
     }
 
-    const receipts = (await open()).filter((r) => ["waiting_payment", "needs_choice", "waiting_explanation"].includes(r.state));
-    const unpinned = receipts.filter((r) => !r.pinnedLine && r.totalMinor !== null);
+    // Every open receipt counts for the contest check, even in a run for one receipt; only `receipts` change state.
+    const all = (await listOpen(env.DB)).filter((r) => ["waiting_payment", "needs_choice", "waiting_explanation"].includes(r.state));
+    const receipts = all.filter((r) => !onlyReceiptId || r.id === onlyReceiptId);
+    const unpinned = all.filter((r) => !r.pinnedLine && r.totalMinor !== null && r.currency);
     let lines: BankLine[] | null = null;
-    if (unpinned.length) {
+    if (receipts.some((r) => unpinned.includes(r))) {
       const oldest = unpinned.map(dateOf).sort()[0];
       lines = await d.fa.listBankLines(env, isoDay(new Date(Date.parse(oldest) - LOOKBACK_DAYS * DAY_MS)));
     }
     const used = await usedLines(env.DB);
 
+    // A line may be pinned on its own only when it is a candidate for exactly one receipt.
+    const decisions = new Map<string, Decision>();
+    const claims = new Map<string, number>();
+    for (const r of lines ? unpinned : []) {
+      try {
+        const day = dateOf(r);
+        const rate = r.currency === "GBP" ? 1 : await d.rate(env, day, r.currency!);
+        const decision = decide(
+          { totalMinor: r.totalMinor!, currency: r.currency!, date: day, supplier: r.supplier, confidence: r.confidence ?? 0, inputKind: r.inputKind ?? "text" },
+          lines!, used, rate,
+        );
+        decisions.set(r.id, decision);
+        for (const l of decision.kind === "match" ? [decision.line] : decision.kind === "choice" ? decision.lines : []) claims.set(l.url, (claims.get(l.url) ?? 0) + 1);
+      } catch (e) {
+        if (isDown(e)) throw e;
+        console.error("match failed", r.id, e);
+      }
+    }
+    const contested = (url: string) => (claims.get(url) ?? 0) > 1;
+
     for (const r of receipts) {
       try {
-        await handle(r, lines, used);
+        await handle(r, decisions.get(r.id), contested);
       } catch (e) {
         if (isDown(e)) throw e;
         console.error("match failed", r.id, e);
