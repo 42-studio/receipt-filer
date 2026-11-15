@@ -37,6 +37,38 @@ it("allows the address itself and Gmail's auto-forward form of it", () => {
   expect(isAllowedSender("someone@else.com", allowed)).toBe(false);
   expect(isAllowedSender("evil+caf_=a=b@else.com", allowed)).toBe(false);
 });
+it("fails closed on blank allowlist entries and a blank sender", () => {
+  expect(isAllowedSender("", [""])).toBe(false);
+  expect(isAllowedSender("  ", ["a@x.com", ""])).toBe(false);
+  expect(isAllowedSender("b@x.com", [""])).toBe(false);
+});
+it("rejects everything when ALLOWED_SENDERS is empty or has a trailing comma", async () => {
+  for (const [list, from] of [["", ""], ["a@x.com,", ""]] as const) {
+    const m = fake(pdfAttached, from);
+    await handleEmail(m, { ...testEnv, ALLOWED_SENDERS: list } as unknown as Env, ctx);
+    expect(m.setReject).toHaveBeenCalledOnce();
+  }
+  expect(await listReceipts(env.DB)).toHaveLength(0);
+});
+it("stores an unreadable receipt when the raw email cannot be read", async () => {
+  const next = vi.fn(async () => {});
+  const m = fake(pdfAttached);
+  (m as any).raw = new ReadableStream({ start: (c) => c.error(new Error("boom raw")) });
+  await handleEmail(m, testEnv, ctx, next);
+  const [r] = await listReceipts(env.DB);
+  expect(r).toMatchObject({ state: "could_not_read", reason: "unreadable_file" });
+  expect((await listEvents(env.DB, r.id)).some((e) => e.message.includes("boom raw"))).toBe(true);
+  expect(next).not.toHaveBeenCalled();
+});
+it("marks the receipt could_not_read when storing a file throws, and a redelivery is still dropped", async () => {
+  const next = vi.fn(async () => {});
+  const bad = { ...testEnv, FILES: { put: async () => { throw new Error("boom r2"); } } } as unknown as Env;
+  await handleEmail(fake(pdfAttached), bad, ctx, next);
+  const [r] = await listReceipts(env.DB);
+  expect(r).toMatchObject({ state: "could_not_read", reason: "unreadable_file" });
+  expect((await listEvents(env.DB, r.id)).some((e) => e.message.includes("boom r2"))).toBe(true);
+  expect(next).not.toHaveBeenCalled();
+});
 it("recognises the Gmail forwarding confirmation sender", () => {
   expect(isGmailForwardingConfirmation("forwarding-noreply@google.com")).toBe(true);
   expect(isGmailForwardingConfirmation("x@google.com")).toBe(false);

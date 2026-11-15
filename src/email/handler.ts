@@ -9,10 +9,11 @@ export const isGmailForwardingConfirmation = (from: string) => from.toLowerCase(
 // Gmail auto-forward rewrites the envelope sender to "local+caf_=...@domain"; strip the tag to compare.
 export function isAllowedSender(envelopeFrom: string, allowed: string[]): boolean {
   const from = envelopeFrom.trim().toLowerCase();
+  if (!from) return false; // null sender (bounces) must never match a blank entry
   const at = from.lastIndexOf("@");
   const tag = from.indexOf("+caf_=");
   const base = tag !== -1 && tag < at ? from.slice(0, tag) + from.slice(at) : from;
-  return allowed.some((a) => a.trim().toLowerCase() === base);
+  return allowed.some((a) => a.trim() !== "" && a.trim().toLowerCase() === base);
 }
 
 async function sha256Hex(data: Uint8Array): Promise<string> {
@@ -27,9 +28,15 @@ export async function handleEmail(
   next?: (receiptId: string) => Promise<void>,
 ): Promise<void> {
   if (isGmailForwardingConfirmation(message.from)) return void (await message.forward(env.NOTIFY_TO));
-  if (!isAllowedSender(message.from, env.ALLOWED_SENDERS.split(","))) return message.setReject("Sender not allowed");
+  if (!isAllowedSender(message.from, env.ALLOWED_SENDERS.split(",").filter((a) => a.trim()))) return message.setReject("Sender not allowed");
 
-  const email = await parseEmail(await new Response(message.raw).arrayBuffer());
+  let email;
+  try {
+    email = await parseEmail(await new Response(message.raw).arrayBuffer());
+  } catch (e) {
+    const r = await createReceipt(env.DB, { messageId: null, emailDate: null, sender: message.from, subject: null, body: null, bodyIsHtml: false, state: "could_not_read", reason: "unreadable_file" });
+    return addEvent(env.DB, r.id, `Could not read the email: ${String(e)}`);
+  }
   if (email.messageId && (await findByMessageId(env.DB, email.messageId))) return;
 
   const { files, tooLarge } = selectReceiptFiles(email.attachments);
@@ -50,21 +57,26 @@ export async function handleEmail(
   const receipt = await createReceipt(env.DB, { ...base, state: "reading", reason: null });
   for (const f of tooLarge) await addEvent(env.DB, receipt.id, `Skipped ${f.filename}: over the size limit`);
 
-  const hashed = await Promise.all(files.map(async (f) => ({ f, sha256: await sha256Hex(f.data) })));
-  for (const { sha256 } of hashed) {
-    const dup = await findDuplicateFile(env.DB, sha256, receipt.id);
-    if (dup) {
-      await updateReceipt(env.DB, receipt.id, { state: "duplicate", duplicateOf: dup.receiptId });
-      return addEvent(env.DB, receipt.id, `Duplicate of receipt ${dup.receiptId}`);
+  try {
+    const hashed = await Promise.all(files.map(async (f) => ({ f, sha256: await sha256Hex(f.data) })));
+    for (const { sha256 } of hashed) {
+      const dup = await findDuplicateFile(env.DB, sha256, receipt.id);
+      if (dup) {
+        await updateReceipt(env.DB, receipt.id, { state: "duplicate", duplicateOf: dup.receiptId });
+        return await addEvent(env.DB, receipt.id, `Duplicate of receipt ${dup.receiptId}`);
+      }
     }
-  }
 
-  for (const { f, sha256 } of hashed) {
-    const id = crypto.randomUUID();
-    const r2Key = `receipts/${receipt.id}/${id}`;
-    await env.FILES.put(r2Key, f.data, { httpMetadata: { contentType: f.contentType } });
-    await addFile(env.DB, { id, receiptId: receipt.id, r2Key, filename: f.filename, contentType: f.contentType, size: f.data.byteLength, sha256 });
+    for (const { f, sha256 } of hashed) {
+      const id = crypto.randomUUID();
+      const r2Key = `receipts/${receipt.id}/${id}`;
+      await env.FILES.put(r2Key, f.data, { httpMetadata: { contentType: f.contentType } });
+      await addFile(env.DB, { id, receiptId: receipt.id, r2Key, filename: f.filename, contentType: f.contentType, size: f.data.byteLength, sha256 });
+    }
+    await addEvent(env.DB, receipt.id, `Received ${files.length} file(s)`);
+  } catch (e) {
+    await updateReceipt(env.DB, receipt.id, { state: "could_not_read", reason: "unreadable_file" });
+    return addEvent(env.DB, receipt.id, `Could not store the files: ${String(e)}`);
   }
-  await addEvent(env.DB, receipt.id, `Received ${files.length} file(s)`);
   if (next) ctx.waitUntil(next(receipt.id));
 }
