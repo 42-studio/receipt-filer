@@ -98,7 +98,7 @@ export async function deleteReceipt(db: D1Database, id: string): Promise<StoredF
   return files;
 }
 
-export async function addFile(db: D1Database, f: Omit<StoredFile, "id">): Promise<StoredFile> {
+export async function addFile(db: D1Database, f: Omit<StoredFile, "id"> & { id?: string }): Promise<StoredFile> {
   const file = { id: crypto.randomUUID(), ...f };
   await db
     .prepare("INSERT INTO files (id, receipt_id, r2_key, filename, content_type, size, sha256) VALUES (?,?,?,?,?,?,?)")
