@@ -1,0 +1,7 @@
+{
+  "total": { "type": "number", "decimals": 2, "instructions": "The total amount charged or paid on this receipt or invoice, including tax. Not a subtotal." },
+  "date": { "type": "date", "instructions": "The date of the receipt, invoice or payment. If only a due date is shown, use the due date. If a numeric date is ambiguous, read it as day/month/year." },
+  "date_text": { "type": "text", "instructions": "The date of the receipt, invoice or payment, copied exactly as it is written." },
+  "supplier": { "type": "text", "instructions": "The name of the business that issued the receipt or invoice." },
+  "currency": { "type": "text", "instructions": "The currency symbol or code written next to the total, for example £, $, US$, €, GBP, USD or EUR." }
+}
