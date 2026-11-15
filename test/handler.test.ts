@@ -162,3 +162,12 @@ it("does not request a notification for a receipt that goes on to be read", asyn
   await handleEmail(fake(pdfAttached), testEnv, ctx, async () => {}, notifyFn);
   expect(notifyFn).not.toHaveBeenCalled();
 });
+it("requests a notification for file_too_large and for a failed file store", async () => {
+  const notifyFn = vi.fn(async () => {});
+  await handleEmail(fake(withPdf(5_100_000)), testEnv, ctx, undefined, notifyFn);
+  expect(notifyFn).toHaveBeenLastCalledWith(testEnv, "could_not_read", expect.objectContaining({ reason: "file_too_large" }));
+  const broken = { ...testEnv, FILES: { put: async () => { throw new Error("r2 down"); } } } as unknown as Env;
+  await handleEmail(fake(pdfAttached), broken, ctx, undefined, notifyFn);
+  expect(notifyFn).toHaveBeenLastCalledWith(broken, "could_not_read", expect.objectContaining({ state: "could_not_read", reason: "unreadable_file" }));
+  expect(notifyFn).toHaveBeenCalledTimes(2);
+});

@@ -72,3 +72,12 @@ it("never throws and does not mark the kind sent when the send fails", async () 
   expect(send).toHaveBeenCalledTimes(2);
   err.mockRestore();
 });
+it("keeps every kind when called with the same stale receipt copy", async () => {
+  const { e, send } = fakeEnv();
+  const r = await make();
+  await notify(e, "stuck", r);
+  await notify(e, "failed", r);
+  expect([...(await getReceipt(env.DB, r.id))!.notified].sort()).toEqual(["failed", "stuck"]);
+  await notify(e, "stuck", r);
+  expect(send).toHaveBeenCalledTimes(2);
+});

@@ -1,4 +1,4 @@
-import { getSetting, setSetting, updateReceipt, type Receipt } from "./db";
+import { getReceipt, getSetting, setSetting, updateReceipt, type Receipt } from "./db";
 import type { Env } from "./env";
 
 export type Kind = "stuck" | "could_not_read" | "needs_choice" | "failed" | "reconnect";
@@ -40,13 +40,16 @@ export async function notify(env: NotifyEnv, kind: Kind, receipt?: Receipt, now:
     if (kind === "reconnect") {
       const last = await getSetting(env.DB, "reconnect_notified_at");
       if (last && now().getTime() - Date.parse(last) < DAY_MS) return;
-    } else if (!receipt || receipt.notified.includes(kind)) return;
+    }
+    // Read the sent list fresh: the caller's copy may be stale after an earlier notify for the same receipt.
+    const sent = kind === "reconnect" ? [] : ((await getReceipt(env.DB, receipt?.id ?? ""))?.notified ?? null);
+    if (!sent || sent.includes(kind)) return;
 
     const { subject, text } = compose(kind, receipt, env.APP_URL);
     await env.EMAIL.send({ to: env.NOTIFY_TO, from: env.FORWARD_ADDRESS, subject, text });
 
     if (kind === "reconnect") await setSetting(env.DB, "reconnect_notified_at", now().toISOString());
-    else await updateReceipt(env.DB, receipt!.id, { notified: [...receipt!.notified, kind] });
+    else await updateReceipt(env.DB, receipt!.id, { notified: [...sent, kind] });
   } catch (e) {
     console.error("notify failed", kind, e);
   }

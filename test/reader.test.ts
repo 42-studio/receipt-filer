@@ -258,3 +258,12 @@ it("requests a could_not_read notification for unreadable_file but not for no_to
   await readReceipt(h.env, id, () => new Date(Date.now() + 25 * 3_600_000), notifyFn);
   expect(notifyFn).toHaveBeenLastCalledWith(h.env, "could_not_read", expect.objectContaining({ id, reason: "unreadable_file" }));
 });
+
+it("requests a notification when the read outcome is unreadable_file", async () => {
+  const notifyFn = vi.fn(async () => {});
+  h.f.mdText = ""; // no text layer and no embedded image: nothing Clairic can read
+  const id = await makeReceipt();
+  await readReceipt(h.env, id, undefined, notifyFn);
+  expect(await getReceipt(env.DB, id)).toMatchObject({ state: "could_not_read", reason: "unreadable_file" });
+  expect(notifyFn).toHaveBeenCalledExactlyOnceWith(h.env, "could_not_read", expect.objectContaining({ id, reason: "unreadable_file" }));
+});
