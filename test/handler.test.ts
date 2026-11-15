@@ -198,3 +198,19 @@ it("still stores an email whose subject merely contains the word receipt", async
   expect(await listReceipts(env.DB)).toHaveLength(1);
   expect(notifyFn).toHaveBeenCalledOnce();
 });
+
+// An email carrying one PDF per given text, so tests control which file hashes repeat.
+const pdfs = (id: string, ...texts: string[]) =>
+  `From: x@y.example\r\nMessage-ID: <${id}@y.example>\r\nSubject: Receipt\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="B"\r\n\r\n--B\r\nContent-Type: text/plain\r\n\r\nhi\r\n` +
+  texts.map((t, i) => `--B\r\nContent-Type: application/pdf; name="f${i}.pdf"\r\nContent-Transfer-Encoding: base64\r\n\r\n${btoa(t)}\r\n`).join("") + "--B--\r\n";
+it("marks a receipt duplicate only when every one of its files is already stored", async () => {
+  await handleEmail(fake(pdfs("one", "%PDF terms", "%PDF invoice 1")), testEnv, ctx);
+  await handleEmail(fake(pdfs("two", "%PDF terms", "%PDF invoice 2")), testEnv, ctx);
+  await handleEmail(fake(pdfs("three", "%PDF invoice 1", "%PDF terms")), testEnv, ctx);
+  const all = await listReceipts(env.DB);
+  const by = (id: string) => all.find((r) => r.messageId?.includes(id))!;
+  expect(by("two").state).toBe("reading");
+  expect(await listFiles(env.DB, by("two").id)).toHaveLength(2);
+  expect(by("three")).toMatchObject({ state: "duplicate", duplicateOf: by("one").id });
+  expect(await listFiles(env.DB, by("three").id)).toHaveLength(0);
+});

@@ -71,12 +71,11 @@ export async function handleEmail(
 
   try {
     const hashed = await Promise.all(files.map(async (f) => ({ f, sha256: await sha256Hex(f.data) })));
-    for (const { sha256 } of hashed) {
-      const dup = await findDuplicateFile(env.DB, sha256, receipt.id);
-      if (dup) {
-        await updateReceipt(env.DB, receipt.id, { state: "duplicate", duplicateOf: dup.receiptId });
-        return await addEvent(env.DB, receipt.id, `Duplicate of receipt ${dup.receiptId}`);
-      }
+    // Duplicate only when every file is already stored: a file repeated in every email from a supplier (terms, a banner) must not hide new receipts.
+    const dups = await Promise.all(hashed.map(({ sha256 }) => findDuplicateFile(env.DB, sha256, receipt.id)));
+    if (dups.every(Boolean)) {
+      await updateReceipt(env.DB, receipt.id, { state: "duplicate", duplicateOf: dups[0]!.receiptId });
+      return await addEvent(env.DB, receipt.id, `Duplicate of receipt ${dups[0]!.receiptId}`);
     }
 
     for (const { f, sha256 } of hashed) {
