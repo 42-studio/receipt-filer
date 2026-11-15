@@ -80,7 +80,7 @@ export async function listOpen(db: D1Database): Promise<Receipt[]> {
 }
 
 export async function updateReceipt(db: D1Database, id: string, patch: Partial<Receipt>): Promise<void> {
-  const keys = (Object.keys(patch) as (keyof Receipt)[]).filter((k) => k !== "id" && k !== "updatedAt" && k in COLS);
+  const keys = (Object.keys(patch) as (keyof Receipt)[]).filter((k) => k !== "id" && k !== "updatedAt" && k in COLS && patch[k] !== undefined);
   const sets = [...keys.map((k) => `${COLS[k]} = ?`), "updated_at = ?"];
   await db
     .prepare(`UPDATE receipts SET ${sets.join(", ")} WHERE id = ?`)

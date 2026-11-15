@@ -31,6 +31,14 @@ it("updates fields and always sets updatedAt", async () => {
   expect(u.updatedAt > "2000-01-01").toBe(true);
 });
 
+it("skips undefined patch values but writes explicit null", async () => {
+  const r = await createReceipt(db, base);
+  await updateReceipt(db, r.id, { attachmentUrls: ["u1"], supplier: "S" });
+  await updateReceipt(db, r.id, { attachmentUrls: undefined, supplier: null });
+  expect(await getReceipt(db, r.id)).toMatchObject({ attachmentUrls: ["u1"], supplier: null });
+  expect(await claimForAttach(db, r.id)).toBe(false);
+});
+
 it("pins one receipt per bank line", async () => {
   const a = await createReceipt(db, base), b = await createReceipt(db, { ...base, messageId: "m2" });
   expect(await pin(db, a.id, "https://fa/bt/1", "auto")).toBe(true);
