@@ -7,3 +7,5 @@ eval/eval/
 eval/samples/
 *.log
 .DS_Store
+__pycache__/
+eval/clairic_results.json
