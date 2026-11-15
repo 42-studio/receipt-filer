@@ -1,0 +1,53 @@
+import { getSetting, setSetting, updateReceipt, type Receipt } from "./db";
+import type { Env } from "./env";
+
+export type Kind = "stuck" | "could_not_read" | "needs_choice" | "failed" | "reconnect";
+export type NotifyEnv = Pick<Env, "DB" | "EMAIL" | "NOTIFY_TO" | "FORWARD_ADDRESS" | "APP_URL">;
+export type Notify = (env: NotifyEnv, kind: Kind, receipt?: Receipt) => Promise<void>;
+
+const QUIET_REASONS = new Set(["no_total", "zero_total"]); // newsletters and zero invoices make no noise
+const DAY_MS = 86_400_000;
+
+export function shouldNotify(kind: Kind, receipt?: Receipt): boolean {
+  return kind !== "could_not_read" || !QUIET_REASONS.has(receipt?.reason ?? "");
+}
+
+const WHY: Record<string, string> = {
+  no_attachment: "The email had no receipt file attached.",
+  file_too_large: "The receipt file is too big for FreeAgent (5 MB limit).",
+  unreadable_file: "The receipt file could not be read.",
+};
+
+function compose(kind: Kind, r: Receipt | undefined, appUrl: string): { subject: string; text: string } {
+  if (kind === "reconnect") {
+    return { subject: "Receipt filer: reconnect FreeAgent", text: `The FreeAgent connection has stopped working. Reconnect it here:\n${appUrl}\n` };
+  }
+  const name = r?.supplier || r?.subject || "a receipt";
+  const link = `${appUrl}/receipts/${r?.id}`;
+  const [label, why] = {
+    could_not_read: ["Could not read", WHY[r?.reason ?? ""] ?? "The receipt could not be read."],
+    stuck: ["Still unmatched", "No matching bank transaction has appeared after two weeks."],
+    needs_choice: ["Choose a match", "More than one bank transaction fits. Pick the right one."],
+    failed: ["Could not file", `FreeAgent rejected the attachment${r?.reason ? `: ${r.reason}` : "."}`],
+  }[kind];
+  return { subject: `Receipt filer: ${label} - ${name}`, text: `${why}\n\nReceipt: ${name}\n${link}\n` };
+}
+
+/** Sends at most one email per receipt and kind. Never throws; a failed send is retried on the next occasion. */
+export async function notify(env: NotifyEnv, kind: Kind, receipt?: Receipt, now: () => Date = () => new Date()): Promise<void> {
+  try {
+    if (!shouldNotify(kind, receipt)) return;
+    if (kind === "reconnect") {
+      const last = await getSetting(env.DB, "reconnect_notified_at");
+      if (last && now().getTime() - Date.parse(last) < DAY_MS) return;
+    } else if (!receipt || receipt.notified.includes(kind)) return;
+
+    const { subject, text } = compose(kind, receipt, env.APP_URL);
+    await env.EMAIL.send({ to: env.NOTIFY_TO, from: env.FORWARD_ADDRESS, subject, text });
+
+    if (kind === "reconnect") await setSetting(env.DB, "reconnect_notified_at", now().toISOString());
+    else await updateReceipt(env.DB, receipt!.id, { notified: [...receipt!.notified, kind] });
+  } catch (e) {
+    console.error("notify failed", kind, e);
+  }
+}

@@ -8,7 +8,7 @@ import pdfAttached from "./fixtures/pdf-attached.eml?raw";
 import plainStub from "./fixtures/plain-stub.eml?raw";
 
 const ME = "josh@example.com";
-const testEnv = { ...env, ALLOWED_SENDERS: `${ME}, other@example.com`, NOTIFY_TO: "owner@example.com" } as unknown as Env;
+const testEnv = { ...env, ALLOWED_SENDERS: `${ME}, other@example.com`, NOTIFY_TO: "owner@example.com", EMAIL: { send: vi.fn(async () => ({ messageId: "x" })) } } as unknown as Env;
 const ctx = { waitUntil: (p: Promise<unknown>) => void p.catch(() => {}), passThroughOnException() {} } as unknown as ExecutionContext;
 
 function fake(rawText: string, from = ME) {
@@ -145,4 +145,20 @@ it("marks a receipt whose file hash exists in another receipt as duplicate", asy
   expect(await listFiles(env.DB, second.id)).toHaveLength(0);
   expect(await r2Count()).toBe(1);
   expect(next).toHaveBeenCalledOnce();
+});
+
+it("requests a could_not_read notification for no_attachment and unreadable_file", async () => {
+  const notifyFn = vi.fn(async () => {});
+  await handleEmail(fake(plainStub), testEnv, ctx, undefined, notifyFn);
+  expect(notifyFn).toHaveBeenLastCalledWith(testEnv, "could_not_read", expect.objectContaining({ reason: "no_attachment" }));
+  const m = fake(pdfAttached);
+  (m as any).raw = new ReadableStream({ start: (c) => c.error(new Error("boom raw")) });
+  await handleEmail(m, testEnv, ctx, undefined, notifyFn);
+  expect(notifyFn).toHaveBeenLastCalledWith(testEnv, "could_not_read", expect.objectContaining({ reason: "unreadable_file" }));
+  expect(notifyFn).toHaveBeenCalledTimes(2);
+});
+it("does not request a notification for a receipt that goes on to be read", async () => {
+  const notifyFn = vi.fn(async () => {});
+  await handleEmail(fake(pdfAttached), testEnv, ctx, async () => {}, notifyFn);
+  expect(notifyFn).not.toHaveBeenCalled();
 });

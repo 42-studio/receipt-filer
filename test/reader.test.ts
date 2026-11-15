@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { addFile, createReceipt, getReceipt, listEvents } from "../src/db";
 import { readInput, readReceipt } from "../src/read/reader";
 import scanUrl from "./fixtures/scan.pdf?inline";
@@ -53,7 +53,7 @@ function fakes() {
       return t;
     },
   };
-  return { f, env: { ...env, AI: ai, IMAGES: images } as unknown as typeof env };
+  return { f, env: { ...env, AI: ai, IMAGES: images, EMAIL: { send: async () => ({ messageId: "x" }) } } as unknown as typeof env };
 }
 
 let h: ReturnType<typeof fakes>;
@@ -243,4 +243,18 @@ it("leaves a receipt that is not reading untouched", async () => {
   expect(await getReceipt(env.DB, id)).toMatchObject({ state: "filed", totalMinor: null });
   expect(await listEvents(env.DB, id)).toHaveLength(0);
   expect(h.f.runs).toHaveLength(0);
+});
+
+it("requests a could_not_read notification for unreadable_file but not for no_total or zero_total", async () => {
+  const notifyFn = vi.fn(async () => {});
+  h.f.runAnswers = answers({ total: null });
+  let id = await makeReceipt();
+  await readReceipt(h.env, id, undefined, notifyFn);
+  h.f.runAnswers = answers({ total: 0 });
+  await readReceipt(h.env, await makeReceipt(), undefined, notifyFn);
+  expect(notifyFn).not.toHaveBeenCalled();
+  h.f.throwOn = "run";
+  id = await makeReceipt();
+  await readReceipt(h.env, id, () => new Date(Date.now() + 25 * 3_600_000), notifyFn);
+  expect(notifyFn).toHaveBeenLastCalledWith(h.env, "could_not_read", expect.objectContaining({ id, reason: "unreadable_file" }));
 });

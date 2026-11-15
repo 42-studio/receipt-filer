@@ -1,5 +1,6 @@
 import { addEvent, getReceipt, listFiles, updateReceipt } from "../db";
 import { CLAIRIC_MAX_IMAGE_BYTES, IMAGE_MAX_SIDE, MAX_IMAGES, MIN_TEXT_CHARS, READ_GIVE_UP_HOURS, type Env } from "../env";
+import { notify, shouldNotify, type Notify, type NotifyEnv } from "../notify";
 import { chooseDate } from "./dates";
 import { toCurrency } from "./currency";
 import fields from "./fields.json";
@@ -90,7 +91,7 @@ export async function readInput(env: ReaderEnv, email: Email, files: InFile[]): 
   }
 }
 
-export async function readReceipt(env: ReaderEnv, receiptId: string, now: () => Date = () => new Date()): Promise<void> {
+export async function readReceipt(env: ReaderEnv & NotifyEnv, receiptId: string, now: () => Date = () => new Date(), notifyFn: Notify = notify): Promise<void> {
   const r = await getReceipt(env.DB, receiptId);
   if (!r || r.state !== "reading") return;
   const files: InFile[] = [];
@@ -102,7 +103,8 @@ export async function readReceipt(env: ReaderEnv, receiptId: string, now: () => 
   if ("retry" in out) {
     if (now().getTime() - Date.parse(r.receivedAt) > READ_GIVE_UP_HOURS * 3_600_000) {
       await updateReceipt(env.DB, receiptId, { state: "could_not_read", reason: "unreadable_file" });
-      return addEvent(env.DB, receiptId, `Gave up reading after ${READ_GIVE_UP_HOURS} hours: ${out.error}`);
+      await addEvent(env.DB, receiptId, `Gave up reading after ${READ_GIVE_UP_HOURS} hours: ${out.error}`);
+      return notifyFn(env, "could_not_read", { ...r, state: "could_not_read", reason: "unreadable_file" });
     }
     const reason = `retrying: ${out.error}`;
     if (r.reason === reason) return;
@@ -111,7 +113,9 @@ export async function readReceipt(env: ReaderEnv, receiptId: string, now: () => 
   }
   if (!out.ok) {
     await updateReceipt(env.DB, receiptId, { state: "could_not_read", reason: out.reason });
-    return addEvent(env.DB, receiptId, `Could not read the receipt: ${out.reason}`);
+    await addEvent(env.DB, receiptId, `Could not read the receipt: ${out.reason}`);
+    const updated = { ...r, state: "could_not_read" as const, reason: out.reason };
+    return shouldNotify("could_not_read", updated) ? notifyFn(env, "could_not_read", updated) : undefined;
   }
   const { reading: x } = out;
   await updateReceipt(env.DB, receiptId, {

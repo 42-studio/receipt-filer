@@ -1,5 +1,6 @@
 import { addEvent, addFile, createReceipt, findByMessageId, findDuplicateFile, updateReceipt } from "../db";
 import type { Env } from "../env";
+import { notify, type Notify } from "../notify";
 import { parseEmail, selectReceiptFiles } from "./parse";
 
 const GMAIL_CONFIRMATION = "forwarding-noreply@google.com";
@@ -26,6 +27,7 @@ export async function handleEmail(
   env: Env,
   ctx: ExecutionContext,
   next?: (receiptId: string) => Promise<void>,
+  notifyFn: Notify = notify,
 ): Promise<void> {
   if (isGmailForwardingConfirmation(message.from)) return void (await message.forward(env.NOTIFY_TO));
   if (!isAllowedSender(message.from, env.ALLOWED_SENDERS.split(",").filter((a) => a.trim()))) return message.setReject("Sender not allowed");
@@ -35,7 +37,8 @@ export async function handleEmail(
     email = await parseEmail(await new Response(message.raw).arrayBuffer());
   } catch (e) {
     const r = await createReceipt(env.DB, { messageId: null, emailDate: null, sender: message.from, subject: null, body: null, bodyIsHtml: false, state: "could_not_read", reason: "unreadable_file" });
-    return addEvent(env.DB, r.id, `Could not read the email: ${String(e)}`);
+    await addEvent(env.DB, r.id, `Could not read the email: ${String(e)}`);
+    return notifyFn(env, "could_not_read", r);
   }
   if (email.messageId && (await findByMessageId(env.DB, email.messageId))) return;
 
@@ -47,6 +50,7 @@ export async function handleEmail(
   const stop = async (reason: "no_attachment" | "file_too_large", why: string) => {
     const r = await createReceipt(env.DB, { ...base, state: "could_not_read", reason });
     await addEvent(env.DB, r.id, why);
+    await notifyFn(env, "could_not_read", r);
   };
   if (files.length === 0) {
     return tooLarge.length
@@ -76,7 +80,8 @@ export async function handleEmail(
     await addEvent(env.DB, receipt.id, `Received ${files.length} file(s)`);
   } catch (e) {
     await updateReceipt(env.DB, receipt.id, { state: "could_not_read", reason: "unreadable_file" });
-    return addEvent(env.DB, receipt.id, `Could not store the files: ${String(e)}`);
+    await addEvent(env.DB, receipt.id, `Could not store the files: ${String(e)}`);
+    return notifyFn(env, "could_not_read", { ...receipt, state: "could_not_read", reason: "unreadable_file" });
   }
   if (next) ctx.waitUntil(next(receipt.id));
 }

@@ -24,6 +24,7 @@
     "ALLOWED_SENDERS": "",
     "NOTIFY_TO": "",
     "OWNER_EMAIL": "",
-    "FORWARD_ADDRESS": ""
+    "FORWARD_ADDRESS": "",
+    "APP_URL": "https://receipts.example.com"
   }
 }
