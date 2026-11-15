@@ -116,10 +116,11 @@ const toLine = (t: RawTx): BankLine => ({
   explanations: (t.bank_transaction_explanations ?? []).map((e) => ({ url: e.url, grossMinor: minor(e.gross_value) })),
 });
 
-export async function listBankLines(env: Env, fromDate: string): Promise<BankLine[]> {
-  const accounts = (await getJson<{ bank_accounts: { url: string; status: string }[] }>(env, `${env.FREEAGENT_BASE_URL}/bank_accounts`)).bank_accounts;
+/** Lines of every active account. The matching rules are written for pounds, so by default only GBP accounts (a missing currency counts as GBP). */
+export async function listBankLines(env: Env, fromDate: string, gbpOnly = true): Promise<BankLine[]> {
+  const accounts = (await getJson<{ bank_accounts: { url: string; status: string; currency?: string }[] }>(env, `${env.FREEAGENT_BASE_URL}/bank_accounts`)).bank_accounts;
   const lines: BankLine[] = [];
-  for (const a of accounts.filter((a) => a.status === "active")) {
+  for (const a of accounts.filter((a) => a.status === "active" && (!gbpOnly || (a.currency ?? "GBP").toUpperCase() === "GBP"))) {
     for (let page = 1; ; page++) {
       const q = new URLSearchParams({ bank_account: a.url, from_date: fromDate, per_page: "100", page: String(page) });
       const txs = (await getJson<{ bank_transactions: RawTx[] }>(env, `${env.FREEAGENT_BASE_URL}/bank_transactions?${q}`)).bank_transactions;

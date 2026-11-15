@@ -296,7 +296,7 @@ export function createApp(partial: Partial<AppDeps> = {}) {
     const to = new Date(centre + MANUAL_MATCH_DAYS * DAY_MS).toISOString().slice(0, 10);
     const q = (c.req.query("q") ?? "").trim();
     const needle = q.toLowerCase();
-    const lines = (await d.fa.listBankLines(c.env, from))
+    const lines = (await d.fa.listBankLines(c.env, from, false)) // every currency: a non-GBP payment is matched here by hand
       .filter((l) => l.datedOn >= from && l.datedOn <= to)
       .filter((l) => !needle || `${l.description} ${l.datedOn} ${money(l.amountMinor, null)}`.toLowerCase().includes(needle))
       .sort((a, b) => b.datedOn.localeCompare(a.datedOn));

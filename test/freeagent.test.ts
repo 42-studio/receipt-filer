@@ -271,3 +271,22 @@ it("throws AttachUnconfirmed with the saved URLs when a later batch fails in any
     expect(e.attachmentUrls).toHaveLength(10);
   }
 });
+
+it("returns lines only from GBP accounts, counting a missing currency as GBP", async () => {
+  await seedTokens();
+  handler = (r) => {
+    const u = new URL(r.url);
+    if (u.pathname.endsWith("/bank_accounts"))
+      return json({ bank_accounts: [
+        { url: `${BASE}/bank_accounts/1`, status: "active", currency: "GBP" },
+        { url: `${BASE}/bank_accounts/2`, status: "active", currency: "USD" },
+        { url: `${BASE}/bank_accounts/3`, status: "active" },
+      ] });
+    const acct = Number(u.searchParams.get("bank_account")!.split("/").pop());
+    return json({ bank_transactions: [tx(acct)] });
+  };
+  const lines = await listBankLines(env, "2026-11-01");
+  expect(lines.map((l) => l.url)).toEqual([`${BASE}/bank_transactions/1`, `${BASE}/bank_transactions/3`]);
+  expect(seen.some((s) => s.url.includes(encodeURIComponent(`${BASE}/bank_accounts/2`)))).toBe(false);
+  expect(await listBankLines(env, "2026-11-01", false)).toHaveLength(3); // the Match page lists every account
+});

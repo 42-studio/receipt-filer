@@ -13,6 +13,10 @@ Cloudflare Worker that attaches emailed receipts to FreeAgent bank transaction e
 - Local dev: `wrangler.jsonc` has an `access.dev` block that signs `wrangler dev` in as `owner@example.com`. Run dev with `OWNER_EMAIL=owner@example.com`, for example `npx wrangler dev --local --var OWNER_EMAIL:owner@example.com`.
 - Every POST must carry an `Origin` header equal to the request's own origin.
 
+## Bank accounts
+
+The matcher reads only GBP bank accounts; an account with no currency counts as GBP. Its rules are written for pound lines. A payment from a non-GBP account needs a manual Match: the Match page lists lines from every account.
+
 ## Exchange rates
 
 `src/match/fx.ts` reads daily rates from Frankfurter: `GET https://api.frankfurter.dev/v1/<day>?base=<CUR>&symbols=GBP`. It is free and needs no account or key. Checked 2026-11-15: `.../v1/2026-11-09?base=USD&symbols=GBP` returns `{"amount":1.0,"base":"USD","date":"2026-11-09","rates":{"GBP":0.74538}}`. For a weekend date it returns the nearest earlier business day (`.../v1/2026-11-08?base=EUR&symbols=GBP` returns `"date":"2026-11-06"`). Rates are cached in the `rates` table under the requested day.

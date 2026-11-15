@@ -19,7 +19,7 @@ function setup(lines: BankLine[] = [line(1)]) {
   const calls: string[] = [];
   const f = { lines, listError: null as Error | null, attached: [] as string[] };
   const fa = {
-    listBankLines: async (_e: Env, from: string) => { calls.push(`list ${from}`); if (f.listError) throw f.listError; return f.lines; },
+    listBankLines: async (_e: Env, from: string, gbpOnly = true) => { calls.push(`list ${from}${gbpOnly ? "" : " all currencies"}`); if (f.listError) throw f.listError; return f.lines; },
     getBankLine: async (_e: Env, url: string) => { calls.push(`get ${url}`); if (f.listError) throw f.listError; return f.lines.find((l) => l.url === url) ?? null; },
     attach: async (_e: Env, url: string, files: unknown[]) => { calls.push(`attach ${url}`); f.attached.push(url); return files.map((_x, i) => `${url}/attachments/${i + 1}`); },
     pickExplanation,
@@ -183,7 +183,7 @@ it("lists bank lines near the receipt date, filtered, with explained and held fl
   const holder = await make({ state: "waiting_explanation" });
   await pin(env.DB, holder.id, line(4).url, "auto");
   const html = await (await call(`/receipts/${r.id}/match`)).text();
-  expect(calls).toContain("list 2026-10-14");
+  expect(calls).toContain("list 2026-10-14 all currencies"); // a non-GBP payment is matched by hand
   expect(html).toContain("ACME LTD");
   expect(html).toContain("OTHER SHOP");
   expect(html).not.toContain("ACME LATE"); // more than 30 days after
