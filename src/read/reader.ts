@@ -1,12 +1,12 @@
 import { addEvent, getReceipt, listFiles, updateReceipt } from "../db";
-import { CLAIRIC_MAX_IMAGE_BYTES, IMAGE_MAX_SIDE, MAX_IMAGES, MIN_TEXT_CHARS, type Env } from "../env";
+import { CLAIRIC_MAX_IMAGE_BYTES, IMAGE_MAX_SIDE, MAX_IMAGES, MIN_TEXT_CHARS, READ_GIVE_UP_HOURS, type Env } from "../env";
 import { chooseDate } from "./dates";
 import { toCurrency } from "./currency";
 import fields from "./fields.json";
 import { embeddedJpegs } from "./pdf";
 
 export interface Reading { totalMinor: number; confidence: number; date: string | null; supplier: string | null; currency: string; inputKind: "text" | "image"; }
-export type ReadOutcome = { ok: true; reading: Reading } | { ok: false; reason: "no_total" | "zero_total" | "unreadable_file" } | { ok: false; retry: true };
+export type ReadOutcome = { ok: true; reading: Reading } | { ok: false; reason: "no_total" | "zero_total" | "unreadable_file" } | { ok: false; retry: true; error: string };
 type ReaderEnv = Pick<Env, "AI" | "IMAGES" | "FILES" | "DB" | "CLAIRIC_MODEL">;
 type Email = { subject: string; body: string; bodyIsHtml: boolean; emailDate: string | null };
 type InFile = { contentType: string; data: Uint8Array };
@@ -65,16 +65,18 @@ export async function readInput(env: ReaderEnv, email: Email, files: InFile[]): 
     if (images.length) input.images = images;
     if (email.emailDate) input.reference_date = email.emailDate;
     const res = (await (env.AI as unknown as { run(m: string, i: unknown): Promise<unknown> }).run(env.CLAIRIC_MODEL, input)) as { answers: Record<string, Answer> };
-    const a = res.answers;
+    const a = res?.answers;
+    if (!a) throw new Error("Clairic reply had no answers");
 
     const total = a.total?.value;
     if (typeof total !== "number") return { ok: false, reason: "no_total" };
-    if (total === 0) return { ok: false, reason: "zero_total" };
+    const totalMinor = Math.round(total * 100);
+    if (totalMinor === 0) return { ok: false, reason: "zero_total" };
     const str = (k: string) => (typeof a[k]?.value === "string" ? (a[k].value as string) : null);
     return {
       ok: true,
       reading: {
-        totalMinor: Math.round(total * 100),
+        totalMinor,
         confidence: a.total.confidence ?? 0,
         date: chooseDate({ inputKind, typed: str("date"), written: str("date_text"), emailDate: email.emailDate }),
         supplier: inputKind === "image" ? null : str("supplier"),
@@ -84,27 +86,36 @@ export async function readInput(env: ReaderEnv, email: Email, files: InFile[]): 
     };
   } catch (e) {
     console.error("read failed", e);
-    return { ok: false, retry: true };
+    return { ok: false, retry: true, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
-export async function readReceipt(env: ReaderEnv, receiptId: string): Promise<void> {
+export async function readReceipt(env: ReaderEnv, receiptId: string, now: () => Date = () => new Date()): Promise<void> {
   const r = await getReceipt(env.DB, receiptId);
-  if (!r) return;
+  if (!r || r.state !== "reading") return;
   const files: InFile[] = [];
   for (const f of await listFiles(env.DB, receiptId)) {
     const obj = await env.FILES.get(f.r2Key);
     if (obj) files.push({ contentType: f.contentType, data: new Uint8Array(await obj.arrayBuffer()) });
   }
   const out = await readInput(env, { subject: r.subject ?? "", body: r.body ?? "", bodyIsHtml: r.bodyIsHtml, emailDate: r.emailDate }, files);
-  if ("retry" in out) return addEvent(env.DB, receiptId, "Reading failed, will retry");
+  if ("retry" in out) {
+    if (now().getTime() - Date.parse(r.receivedAt) > READ_GIVE_UP_HOURS * 3_600_000) {
+      await updateReceipt(env.DB, receiptId, { state: "could_not_read", reason: "unreadable_file" });
+      return addEvent(env.DB, receiptId, `Gave up reading after ${READ_GIVE_UP_HOURS} hours: ${out.error}`);
+    }
+    const reason = `retrying: ${out.error}`;
+    if (r.reason === reason) return;
+    await updateReceipt(env.DB, receiptId, { reason });
+    return addEvent(env.DB, receiptId, `Reading failed, will retry: ${out.error}`);
+  }
   if (!out.ok) {
     await updateReceipt(env.DB, receiptId, { state: "could_not_read", reason: out.reason });
     return addEvent(env.DB, receiptId, `Could not read the receipt: ${out.reason}`);
   }
   const { reading: x } = out;
   await updateReceipt(env.DB, receiptId, {
-    state: "waiting_payment", supplier: x.supplier, totalMinor: x.totalMinor, currency: x.currency,
+    state: "waiting_payment", reason: null, supplier: x.supplier, totalMinor: x.totalMinor, currency: x.currency,
     receiptDate: x.date, confidence: x.confidence, inputKind: x.inputKind,
   });
   await addEvent(env.DB, receiptId, `Read ${x.currency} ${(x.totalMinor / 100).toFixed(2)} (${x.inputKind}, confidence ${x.confidence.toFixed(2)})`);

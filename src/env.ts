@@ -19,3 +19,4 @@ export const IMAGE_MAX_SIDE = 1600;
 export const MIN_TEXT_CHARS = 40;
 export const SHORT_PLAIN_TEXT_CHARS = 200;
 export const ATTACH_BATCH = 10;
+export const READ_GIVE_UP_HOURS = 24;

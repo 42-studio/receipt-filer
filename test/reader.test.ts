@@ -159,9 +159,19 @@ it("returns a low-confidence reading instead of rejecting it", async () => {
 
 it("asks for a retry when Clairic or toMarkdown throws", async () => {
   h.f.throwOn = "run";
-  expect(await readInput(h.env, textEmail, [textPdf])).toEqual({ ok: false, retry: true });
+  expect(await readInput(h.env, textEmail, [textPdf])).toEqual({ ok: false, retry: true, error: "boom" });
   h.f.throwOn = "markdown";
-  expect(await readInput(h.env, textEmail, [textPdf])).toEqual({ ok: false, retry: true });
+  expect(await readInput(h.env, textEmail, [textPdf])).toEqual({ ok: false, retry: true, error: "boom" });
+});
+
+it("treats a Clairic reply with no answers as a retry with an error text", async () => {
+  h.f.runAnswers = undefined as never;
+  expect(await readInput(h.env, textEmail, [textPdf])).toMatchObject({ ok: false, retry: true, error: expect.any(String) });
+});
+
+it("returns zero_total when the total rounds to zero minor units", async () => {
+  h.f.runAnswers = answers({ total: 0.004 });
+  expect(await readInput(h.env, textEmail, [textPdf])).toEqual({ ok: false, reason: "zero_total" });
 });
 
 it("readReceipt writes waiting_payment, or could_not_read with the reason, or leaves reading on retry", async () => {
@@ -188,6 +198,49 @@ it("readReceipt writes waiting_payment, or could_not_read with the reason, or le
   h.f.throwOn = "run";
   id = await make();
   await readReceipt(h.env, id);
-  expect(await getReceipt(env.DB, id)).toMatchObject({ state: "reading", reason: null });
+  expect(await getReceipt(env.DB, id)).toMatchObject({ state: "reading", reason: "retrying: boom" });
   expect((await listEvents(env.DB, id)).length).toBe(1);
+});
+
+async function makeReceipt(state: "reading" | "filed" = "reading") {
+  const r = await createReceipt(env.DB, { messageId: crypto.randomUUID(), emailDate: "2026-11-13", sender: "a@b.c", subject: "Receipt", body: "Thanks", bodyIsHtml: false, state, reason: null });
+  const r2Key = `test/${r.id}.pdf`;
+  await env.FILES.put(r2Key, textPdf.data);
+  await addFile(env.DB, { receiptId: r.id, r2Key, filename: "r.pdf", contentType: "application/pdf", size: textPdf.data.length, sha256: r.id });
+  return r.id;
+}
+
+it("stores the retry reason and writes one event for two identical failures, a second for a changed error", async () => {
+  h.f.throwOn = "run";
+  const id = await makeReceipt();
+  await readReceipt(h.env, id);
+  await readReceipt(h.env, id);
+  expect(await getReceipt(env.DB, id)).toMatchObject({ state: "reading", reason: "retrying: boom" });
+  expect(await listEvents(env.DB, id)).toHaveLength(1);
+  h.f.throwOn = "markdown";
+  h.f.mdText = LONG;
+  const orig = h.env.AI.toMarkdown;
+  (h.env.AI as any).toMarkdown = async () => { throw new Error("different"); };
+  await readReceipt(h.env, id);
+  expect(await getReceipt(env.DB, id)).toMatchObject({ reason: "retrying: different" });
+  expect(await listEvents(env.DB, id)).toHaveLength(2);
+  (h.env.AI as any).toMarkdown = orig;
+});
+
+it("gives up on a retry outcome for a receipt received over 24 hours ago", async () => {
+  h.f.throwOn = "run";
+  const id = await makeReceipt();
+  await readReceipt(h.env, id, () => new Date(Date.now() + 25 * 3_600_000));
+  expect(await getReceipt(env.DB, id)).toMatchObject({ state: "could_not_read", reason: "unreadable_file" });
+  const ev = await listEvents(env.DB, id);
+  expect(ev).toHaveLength(1);
+  expect(ev[0].message).toContain("boom");
+});
+
+it("leaves a receipt that is not reading untouched", async () => {
+  const id = await makeReceipt("filed");
+  await readReceipt(h.env, id);
+  expect(await getReceipt(env.DB, id)).toMatchObject({ state: "filed", totalMinor: null });
+  expect(await listEvents(env.DB, id)).toHaveLength(0);
+  expect(h.f.runs).toHaveLength(0);
 });
