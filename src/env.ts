@@ -24,3 +24,4 @@ export const MIN_TEXT_CHARS = 40;
 export const SHORT_PLAIN_TEXT_CHARS = 200;
 export const ATTACH_BATCH = 10;
 export const READ_GIVE_UP_HOURS = 24;
+export const MAX_BODY_CHARS = 500_000; // a bigger body could make the D1 insert throw and lose the receipt

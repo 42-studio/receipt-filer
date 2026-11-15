@@ -70,3 +70,11 @@ it("parses the fixtures", async () => {
   expect(o.files).toHaveLength(1);
   expect(o.tooLarge).toHaveLength(1);
 });
+it("accepts image/jpg and application/x-pdf and stores the standard type", () => {
+  const { files } = selectReceiptFiles([file("image/jpg", 60_000, "a.jpg"), file("application/x-pdf", 1_000, "a.pdf")]);
+  expect(files.map((f) => f.contentType)).toEqual(["image/jpeg", "application/pdf"]);
+});
+it("names a file that has no filename after its type", () => {
+  const { files } = selectReceiptFiles([file("application/pdf", 1_000, ""), file("image/jpg", 60_000, " "), file("image/png", 60_000, "keep.png")]);
+  expect(files.map((f) => f.filename)).toEqual(["receipt-1.pdf", "receipt-2.jpg", "keep.png"]);
+});

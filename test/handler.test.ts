@@ -214,3 +214,18 @@ it("marks a receipt duplicate only when every one of its files is already stored
   expect(by("three")).toMatchObject({ state: "duplicate", duplicateOf: by("one").id });
   expect(await listFiles(env.DB, by("three").id)).toHaveLength(0);
 });
+it("logs a rejected sender with the envelope sender only", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  await handleEmail(fake(pdfAttached, "spam@else.com"), testEnv, ctx);
+  expect(warn).toHaveBeenCalledOnce();
+  expect(warn.mock.calls[0].join(" ")).toContain("spam@else.com");
+  expect(warn.mock.calls[0].join(" ")).not.toContain("Pixelgrove");
+  warn.mockRestore();
+});
+it("stores a huge body cut to 500,000 characters instead of losing the receipt", async () => {
+  const big = withId(pdfAttached, "huge@pixelgrove.example").replace("Total paid", "x".repeat(600_000) + " Total paid");
+  await handleEmail(fake(big), testEnv, ctx);
+  const [r] = await listReceipts(env.DB);
+  expect(r.state).toBe("reading");
+  expect(r.body!.length).toBe(500_000);
+});

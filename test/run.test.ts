@@ -253,9 +253,11 @@ it("converts a WebP file to JPEG before attaching, and passes other types throug
     await env.FILES.put(key, new Uint8Array([9, 9]));
     await addFile(env.DB, { receiptId: r.id, r2Key: key, filename: name, contentType: type, size: 2, sha256: crypto.randomUUID() });
   }
-  const images = { input: () => ({ output: async () => ({ image: () => new Response(new Uint8Array([0xff, 0xd8])).body! }) }) };
+  const transforms: unknown[] = [];
+  const images = { input: () => { const t = { transform: (o: unknown) => (transforms.push(o), t), output: async () => ({ image: () => new Response(new Uint8Array([0xff, 0xd8])).body! }) }; return t; } };
   const { f, deps } = fakes();
   await runMatcher({ ...env, IMAGES: images } as unknown as Env, deps);
+  expect(transforms).toEqual([{ width: 1600, height: 1600, fit: "scale-down" }]); // keeps the JPEG under FreeAgent's 5 MB
   expect(f.attachCalls[0].files.map((x) => [x.filename, x.contentType])).toEqual([["a.jpg", "image/jpeg"], ["b.png", "image/png"]]);
   expect([...f.attachCalls[0].files[0].data]).toEqual([0xff, 0xd8]);
 });

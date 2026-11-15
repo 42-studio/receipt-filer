@@ -17,6 +17,8 @@ const EXT_TYPES: Record<string, string> = {
   gif: "image/gif", webp: "image/webp", heic: "image/heic",
 };
 const ACCEPTED = new Set(Object.values(EXT_TYPES));
+const ALIASES: Record<string, string> = { "image/jpg": "image/jpeg", "application/x-pdf": "application/pdf" };
+const TYPE_EXT: Record<string, string> = { "application/pdf": "pdf", "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/heic": "heic" };
 
 export function chooseBody(plain: string | null, html: string | null): { kind: "plain" | "html"; content: string } {
   const p = plain?.trim() ?? "";
@@ -61,7 +63,8 @@ export async function parseEmail(raw: ArrayBuffer): Promise<ParsedEmail> {
 
 // Normalises octet-stream attachments by extension; returns null when the type is not accepted.
 function receiptType(a: Attachment): string | null {
-  const type = a.contentType.toLowerCase();
+  const lower = a.contentType.toLowerCase();
+  const type = ALIASES[lower] ?? lower;
   if (ACCEPTED.has(type)) return type;
   if (type !== "application/octet-stream") return null;
   return EXT_TYPES[a.filename.split(".").pop()?.toLowerCase() ?? ""] ?? null;
@@ -74,7 +77,8 @@ export function selectReceiptFiles(a: Attachment[]): { files: Attachment[]; tooL
     const type = receiptType(att);
     if (!type) continue;
     if (type !== "application/pdf" && att.data.byteLength < MIN_IMAGE_BYTES) continue; // logos and tracking pixels
-    (att.data.byteLength > MAX_FILE_BYTES ? tooLarge : files).push({ ...att, contentType: type });
+    const filename = att.filename.trim() || `receipt-${files.length + tooLarge.length + 1}.${TYPE_EXT[type]}`;
+    (att.data.byteLength > MAX_FILE_BYTES ? tooLarge : files).push({ ...att, filename, contentType: type });
   }
   return { files, tooLarge };
 }

@@ -1,5 +1,5 @@
 import { addEvent, claimForAttach, getReceipt, listFiles, listOpen, pin, releaseClaim, unpin, updateReceipt, usedLines, type Receipt, type State } from "../db";
-import { LOOKBACK_DAYS, STUCK_AFTER_DAYS, type Env } from "../env";
+import { IMAGE_MAX_SIDE, LOOKBACK_DAYS, STUCK_AFTER_DAYS, type Env } from "../env";
 import * as freeagent from "../freeagent/client";
 import { AttachUnconfirmed, FreeAgentAuthError, FreeAgentUnavailable, type BankLine } from "../freeagent/client";
 import { notify } from "../notify";
@@ -22,10 +22,12 @@ const DAY_MS = 86_400_000;
 export const UNCONFIRMED = "FreeAgent did not confirm the attachment. Check the transaction in FreeAgent before you press Retry.";
 const NEEDS_CONVERSION = new Set(["image/webp", "image/heic", "image/heif"]); // FreeAgent takes only PNG, JPEG, GIF, PDF
 
-/** Converts WebP and HEIC/HEIF to JPEG; every other file passes through unchanged. */
+/** Converts WebP and HEIC/HEIF to JPEG, scaled down to IMAGE_MAX_SIDE; every other file passes through unchanged. */
 export async function toFreeAgentFile(env: Env, f: AttachFile): Promise<AttachFile> {
   if (!NEEDS_CONVERSION.has(f.contentType)) return f;
-  const out = await env.IMAGES.input(new Response(f.data as BodyInit).body!).output({ format: "image/jpeg", quality: 85 });
+  const out = await env.IMAGES.input(new Response(f.data as BodyInit).body!)
+    .transform({ width: IMAGE_MAX_SIDE, height: IMAGE_MAX_SIDE, fit: "scale-down" }) // keeps the JPEG under FreeAgent's 5 MB
+    .output({ format: "image/jpeg", quality: 85 });
   return {
     filename: f.filename.replace(/\.[^./]+$/, "") + ".jpg",
     contentType: "image/jpeg",

@@ -1,5 +1,5 @@
 import { addEvent, addFile, createReceipt, findByMessageId, findDuplicateFile, updateReceipt } from "../db";
-import type { Env } from "../env";
+import { MAX_BODY_CHARS, type Env } from "../env";
 import { notify, SUBJECT_PREFIX, type Notify } from "../notify";
 import { parseEmail, selectReceiptFiles } from "./parse";
 
@@ -37,7 +37,10 @@ export async function handleEmail(
   notifyFn: Notify = notify,
 ): Promise<void> {
   if (isGmailForwardingConfirmation(message.from)) return void (await message.forward(env.NOTIFY_TO));
-  if (!isAllowedSender(message.from, (env.ALLOWED_SENDERS ?? "").split(",").filter((a) => a.trim()))) return message.setReject("Sender not allowed");
+  if (!isAllowedSender(message.from, (env.ALLOWED_SENDERS ?? "").split(",").filter((a) => a.trim()))) {
+    console.warn("rejected sender", message.from);
+    return message.setReject("Sender not allowed");
+  }
 
   let email;
   try {
@@ -53,7 +56,7 @@ export async function handleEmail(
   const { files, tooLarge } = selectReceiptFiles(email.attachments);
   const base = {
     messageId: email.messageId, emailDate: email.date, sender: email.from, subject: email.subject,
-    body: email.body, bodyIsHtml: email.bodyIsHtml,
+    body: email.body.slice(0, MAX_BODY_CHARS), bodyIsHtml: email.bodyIsHtml,
   };
   const stop = async (reason: "no_attachment" | "file_too_large", why: string) => {
     const r = await createReceipt(env.DB, { ...base, state: "could_not_read", reason });
