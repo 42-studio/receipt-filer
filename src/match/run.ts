@@ -49,7 +49,7 @@ export async function runMatcher(env: Env, partial: Partial<Deps> = {}, onlyRece
 
   // Files the receipt on its line, or waits for the line's explanation.
   const file = async (r: Receipt, line: BankLine) => {
-    const explanation = r.totalMinor === null ? null : d.fa.pickExplanation(line, r.totalMinor);
+    const explanation = d.fa.pickExplanation(line, r.totalMinor ?? NaN); // no total (hand-matched): NaN matches nothing, so the largest explanation is taken
     if (!explanation) {
       if (r.state !== "waiting_explanation") await setState(r, "waiting_explanation", null, "Matched; waiting for the bank line to be explained");
       return;

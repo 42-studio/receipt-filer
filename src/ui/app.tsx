@@ -18,7 +18,7 @@ const defaults: AppDeps = { fa: freeagent, read: (env, id) => readReceipt(env, i
 type Action = "match" | "retry" | "delete";
 // The table under "Receipt states" in the design. It is binding.
 const ACTIONS: Record<State, Action[]> = {
-  reading: [],
+  reading: ["delete"], // it can sit here for up to a day when the model is down
   could_not_read: ["match", "retry", "delete"],
   duplicate: ["delete"],
   waiting_payment: ["match", "retry", "delete"],

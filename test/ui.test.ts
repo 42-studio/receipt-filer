@@ -104,7 +104,7 @@ it("lists open receipts before filed ones with their actions", async () => {
 it("shows only the actions the state allows", async () => {
   const { call } = setup();
   const table: Record<string, string[]> = {
-    reading: [], could_not_read: ["match", "retry", "delete"], duplicate: ["delete"], waiting_payment: ["match", "retry", "delete"],
+    reading: ["delete"], could_not_read: ["match", "retry", "delete"], duplicate: ["delete"], waiting_payment: ["match", "retry", "delete"],
     needs_choice: ["match", "delete"], waiting_explanation: ["match", "delete"], filed: ["delete"], failed: ["match", "retry", "delete"],
   };
   for (const [state, allowed] of Object.entries(table)) {
@@ -217,6 +217,16 @@ it("manual match works from a failed or could-not-read receipt", async () => {
     expect(["filed", "waiting_explanation"], state).toContain(after.state);
     await env.DB.prepare("DELETE FROM receipts").run();
   }
+});
+
+it("manual match files a could-not-read receipt that has no total", async () => {
+  const { call, f } = setup();
+  const r = await make({ state: "could_not_read", reason: "no_total", totalMinor: null, currency: null, confidence: null }, 2);
+  expect((await call(`/receipts/${r.id}/match`, { method: "POST", form: { line: line(1).url } })).status).toBe(303);
+  const after = await get(r.id);
+  expect([after.state, after.pinnedBy]).toEqual(["filed", "manual"]);
+  expect(f.attached).toEqual([`${BASE}/bank_transaction_explanations/1`]);
+  expect(after.attachmentUrls).toHaveLength(2);
 });
 
 it("manual match on an unexplained line waits", async () => {
