@@ -4,6 +4,8 @@ import { addEvent, deleteReceipt, getReceipt, getSetting, listEvents, listFiles,
 import { MANUAL_MATCH_DAYS, type Env } from "../env";
 import * as freeagent from "../freeagent/client";
 import { FreeAgentAuthError, FreeAgentUnavailable, type BankLine } from "../freeagent/client";
+import { rateToGbp } from "../match/fx";
+import { decide } from "../match/matcher";
 import { runMatcher } from "../match/run";
 import { readReceipt } from "../read/reader";
 
@@ -11,9 +13,10 @@ export interface AppDeps {
   fa: Pick<typeof freeagent, "listBankLines" | "getBankLine" | "authoriseUrl" | "exchangeCode" | "isConnected">;
   read: (env: Env, receiptId: string) => Promise<void>;
   runMatcher: (env: Env, receiptId: string) => Promise<void>;
+  rate: typeof rateToGbp;
 }
 
-const defaults: AppDeps = { fa: freeagent, read: (env, id) => readReceipt(env, id), runMatcher: (env, id) => runMatcher(env, {}, id) };
+const defaults: AppDeps = { fa: freeagent, read: (env, id) => readReceipt(env, id), runMatcher: (env, id) => runMatcher(env, {}, id), rate: rateToGbp };
 
 type Action = "match" | "retry" | "delete";
 // The table under "Receipt states" in the design. It is binding.
@@ -149,7 +152,7 @@ const ReceiptPage = ({ r, files, events }: { r: Receipt; files: Awaited<ReturnTy
   </Layout>
 );
 
-const MatchPage = ({ r, lines, q, own, held }: { r: Receipt; lines: BankLine[]; q: string; own: string | null; held: Set<string> }) => (
+const MatchPage = ({ r, lines, q, own, held, fits }: { r: Receipt; lines: BankLine[]; q: string; own: string | null; held: Set<string>; fits: Set<string> }) => (
   <Layout title="Match a bank line">
     <p><a href={`/receipts/${r.id}`}>{r.supplier || r.subject || "Receipt"}</a>: {money(r.totalMinor, r.currency)} on {receiptDay(r)}. Bank lines within {MANUAL_MATCH_DAYS} days.</p>
     <form method="get" action={`/receipts/${r.id}/match`}><input name="q" value={q} placeholder="Filter" /> <button>Filter</button></form>
@@ -163,7 +166,7 @@ const MatchPage = ({ r, lines, q, own, held }: { r: Receipt; lines: BankLine[]; 
               <tr>
                 <td data-l="Date">{l.datedOn}</td>
                 <td data-l="Amount">{money(l.amountMinor, null)}</td>
-                <td>{l.description}</td>
+                <td>{fits.has(l.url) && <strong>Fits · </strong>}{l.description}</td>
                 <td data-l="Explained">{l.explanations.length ? "explained" : "not explained"}{taken && <span class="err"> · held by another receipt</span>}{l.url === own && " · current match"}</td>
                 <td>{!taken && <form method="post" action={`/receipts/${r.id}/match`}><input type="hidden" name="line" value={l.url} /><button>Match</button></form>}</td>
               </tr>
@@ -296,11 +299,21 @@ export function createApp(partial: Partial<AppDeps> = {}) {
     const to = new Date(centre + MANUAL_MATCH_DAYS * DAY_MS).toISOString().slice(0, 10);
     const q = (c.req.query("q") ?? "").trim();
     const needle = q.toLowerCase();
-    const lines = (await d.fa.listBankLines(c.env, from, false)) // every currency: a non-GBP payment is matched here by hand
-      .filter((l) => l.datedOn >= from && l.datedOn <= to)
+    const near = (await d.fa.listBankLines(c.env, from, false)) // every currency: a non-GBP payment is matched here by hand
+      .filter((l) => l.datedOn >= from && l.datedOn <= to);
+    const held = await usedLines(c.env.DB);
+    // The lines the matcher's rules accept for this receipt go first, marked Fits.
+    let fits = new Set<string>();
+    if (r.totalMinor !== null && r.currency) {
+      const others = new Set([...held].filter((u) => u !== r.pinnedLine));
+      const rate = r.currency === "GBP" ? 1 : await d.rate(c.env, receiptDay(r), r.currency);
+      const dec = decide({ totalMinor: r.totalMinor, currency: r.currency, date: receiptDay(r), supplier: r.supplier, confidence: r.confidence ?? 0, inputKind: r.inputKind ?? "text" }, near, others, rate);
+      fits = new Set((dec.kind === "match" ? [dec.line] : dec.kind === "choice" ? dec.lines : []).map((l) => l.url));
+    }
+    const lines = near
       .filter((l) => !needle || `${l.description} ${l.datedOn} ${money(l.amountMinor, null)}`.toLowerCase().includes(needle))
-      .sort((a, b) => b.datedOn.localeCompare(a.datedOn));
-    return page(c, <MatchPage r={r} lines={lines} q={q} own={r.pinnedLine} held={await usedLines(c.env.DB)} />);
+      .sort((a, b) => Number(fits.has(b.url)) - Number(fits.has(a.url)) || b.datedOn.localeCompare(a.datedOn));
+    return page(c, <MatchPage r={r} lines={lines} q={q} own={r.pinnedLine} held={held} fits={fits} />);
   });
 
   app.post("/receipts/:id/match", async (c) => {

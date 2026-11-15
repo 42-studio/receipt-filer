@@ -29,7 +29,7 @@ function setup(lines: BankLine[] = [line(1)]) {
   };
   const read = vi.fn(async (_e: Env, id: string) => { await updateReceipt(env.DB, id, { state: "waiting_payment", reason: null, supplier: "Acme", totalMinor: 2400, currency: "GBP", receiptDate: "2026-11-13", confidence: 0.9, inputKind: "text" }); });
   const match = (e: Env, id: string) => runMatcher(e, { fa, rate: async () => 1, notify: vi.fn(async () => {}), now: () => NOW, read: read as never, convert: async (_e, x) => x }, id);
-  const deps: AppDeps = { fa, read, runMatcher: match };
+  const deps: AppDeps = { fa, read, runMatcher: match, rate: async () => 1 };
   const app = createApp(deps);
   const ctx = (email: string | null | undefined) => ({ waitUntil() {}, passThroughOnException() {}, ...(email === undefined ? {} : { access: { aud: "aud", getIdentity: async () => (email === null ? undefined : { email }) } }) }) as unknown as ExecutionContext;
   const call = (path: string, o: { method?: string; email?: string | null; noAccess?: boolean; origin?: string | null; form?: Record<string, string>; e?: Env } = {}) => {
@@ -391,4 +391,17 @@ it("retry and match on a failed receipt release a held claim, and the page shows
     await env.DB.prepare("DELETE FROM receipts").run(); // frees line 1 for the next action
   }
   expect(f.attached).toHaveLength(2);
+});
+
+it("lists the lines that fit first, marked Fits, then the others", async () => {
+  const { call } = setup([
+    line(3, { description: "NEWEST OTHER", amountMinor: -999, datedOn: "2026-11-15" }),
+    line(1, { description: "FIT ONE", datedOn: "2026-11-13" }),
+    line(2, { description: "FIT TWO", datedOn: "2026-11-14" }),
+  ]);
+  const r = await make({ state: "needs_choice", receiptDate: "2026-11-13" });
+  const html = await (await call(`/receipts/${r.id}/match`)).text();
+  const rows = html.split("<tr>").slice(2);
+  expect(rows.map((row) => /FIT ONE|FIT TWO|NEWEST OTHER/.exec(row)![0])).toEqual(["FIT TWO", "FIT ONE", "NEWEST OTHER"]);
+  expect(rows.map((row) => row.includes("Fits"))).toEqual([true, true, false]);
 });
