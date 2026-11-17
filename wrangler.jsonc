@@ -2,6 +2,10 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "receipt-filer",
   "main": "src/index.ts",
+  // The UI is served only on the custom domain, behind Cloudflare Access.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "receipts.42.studio", "custom_domain": true }],
   "compatibility_date": "2026-11-15",
   "compatibility_flags": ["nodejs_compat"],
   // Local dev only: wrangler dev answers ctx.access.getIdentity() with this person. Copy .dev.vars.example to .dev.vars for dev.
@@ -12,7 +16,7 @@
     {
       "binding": "DB",
       "database_name": "receipt-filer",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "6b366404-c13a-4c62-b7a2-fb325e75f6b9",
       "migrations_dir": "migrations"
     }
   ],
@@ -24,6 +28,6 @@
   "vars": {
     "FREEAGENT_BASE_URL": "https://api.sandbox.freeagent.com/v2",
     "CLAIRIC_MODEL": "@cf/cloudflare/clairic",
-    "APP_URL": "https://receipts.example.com"
+    "APP_URL": "https://receipts.42.studio"
   }
 }
