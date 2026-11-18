@@ -4,7 +4,7 @@ Cloudflare Worker that attaches emailed receipts to FreeAgent bank transaction e
 
 - `npm test` runs Vitest in the Workers pool with a local D1 (migrations applied from `migrations/`). The tests take the secrets from `vitest.config.ts`.
 - `npm run types` regenerates `worker-configuration.d.ts` after editing `wrangler.jsonc`.
-- `wrangler.jsonc` holds a placeholder D1 id. Create the real resources before the first deploy.
+- `wrangler.jsonc` holds the ids and the hostname of the running deployment. For a new deployment, replace them as the setup steps say.
 
 ## One-time setup
 
@@ -23,7 +23,7 @@ Run these steps in this order. Every command runs from the repo folder.
 6. Deploy: `npx wrangler deploy`. The Images binding needs Images enabled on the Cloudflare account.
 7. Switch on Cloudflare Access for the Worker. Make the owner's email the only allowed identity.
 8. In Email Routing, verify the `NOTIFY_TO` address as a destination address. The Worker cannot send to an unverified address.
-9. In Email Routing, add a rule that sends mail for the forwarding address to the Worker.
+9. In Email Routing, add a rule that sends mail for the forwarding address to the Worker. When the address is on a subdomain, add the subdomain first (Email Routing, Settings, Subdomains).
 10. In the FreeAgent developer app, register `<APP_URL>/oauth/callback` as the redirect URI.
 11. Open the Settings page and connect FreeAgent.
 12. In Gmail, add the forwarding address as a forwarding address. The Worker forwards Gmail's confirmation email to `NOTIFY_TO`. Then add the filter that forwards receipts.
