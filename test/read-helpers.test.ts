@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { toCurrency } from "../src/read/currency";
 import { chooseDate, parseWrittenDate } from "../src/read/dates";
-import { embeddedJpegs } from "../src/read/pdf";
+import { embeddedJpegs, splitJoinedBlocks } from "../src/read/pdf";
 import scanUrl from "./fixtures/scan.pdf?inline";
 import textUrl from "./fixtures/text.pdf?inline";
 
@@ -17,6 +17,11 @@ it("copies both JPEGs out of a two-page scan", () => {
   expect(out[0].length).toBeGreaterThanOrEqual(out[1].length);
 });
 it("returns nothing for a text PDF", () => expect(embeddedJpegs(textPdf)).toEqual([]));
+it("breaks PDF text where a block that ends in a digit is joined to a capitalised word", () => {
+  expect(splitJoinedBlocks("Company name Studio 42Cloudflare, Inc. @cloudflare")).toBe("Company name Studio 42\nCloudflare, Inc. @cloudflare");
+  expect(splitJoinedBlocks("$0.00Durable Objects")).toBe("$0.00\nDurable Objects");
+  for (const same of ["IP28 7DE", "Total £23.47", "13 Nov 2026", "3M", "PayPal", "GitHub", "INV-2026A", "42 Studio"]) expect(splitJoinedBlocks(same)).toBe(same);
+});
 it.each([["03/04/2026", "2026-04-03"], ["04/03/26", "2026-03-04"], ["07/11/2026 20:41", "2026-11-07"], ["14.10.2026", "2026-10-14"],
   ["02/03/18 05:16 PM", "2018-03-02"], ["4th March 2026", null], ["November 2026", null], ["31/02/2026", null]])(
   "parses %s day-first", (w, iso) => expect(parseWrittenDate(w)).toBe(iso));

@@ -26,3 +26,9 @@ export function embeddedJpegs(pdf: Uint8Array): Uint8Array[] {
   }
   return found.sort((a, b) => b.length - a.length);
 }
+
+// toMarkdown joins neighbouring PDF text blocks with no space ("Company name Studio 42Cloudflare, Inc."),
+// and Clairic then reads both names as one supplier. A line break at the join gives the right name.
+// shortcut: only splits a digit followed by a capitalised word; a join after a letter stays joined, and a
+// name like "1Password" is split. Remove when the converter keeps blocks apart.
+export const splitJoinedBlocks = (text: string): string => text.replace(/(?<=\d)(?=[A-Z][a-z])/g, "\n");

@@ -55,7 +55,9 @@ def to_text(name, blob, mime):
             + f"\r\n--{b}--\r\n").encode()
     out = post("/tomarkdown", body, f"multipart/form-data; boundary={b}")
     res = (out.get("result") or [{}])[0] if out.get("success") else {}
-    return res.get("data") or "" if res.get("format") != "error" else ""
+    text = res.get("data") or "" if res.get("format") != "error" else ""
+    # Same rule as splitJoinedBlocks in src/read/pdf.ts: break PDF text where two blocks are joined.
+    return re.sub(r"(?<=\d)(?=[A-Z][a-z])", "\n", text) if mime == "application/pdf" else text
 
 
 def embedded_jpegs(pdf):

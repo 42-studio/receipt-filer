@@ -4,7 +4,7 @@ import { notify, shouldNotify, type Notify, type NotifyEnv } from "../notify";
 import { chooseDate } from "./dates";
 import { toCurrency } from "./currency";
 import fields from "./fields.json";
-import { embeddedJpegs } from "./pdf";
+import { embeddedJpegs, splitJoinedBlocks } from "./pdf";
 
 export interface Reading { totalMinor: number; confidence: number; date: string | null; supplier: string | null; currency: string; inputKind: "text" | "image"; }
 export type ReadOutcome = { ok: true; reading: Reading } | { ok: false; reason: "no_total" | "zero_total" | "unreadable_file" } | { ok: false; retry: true; error: string };
@@ -45,7 +45,7 @@ export async function readInput(env: ReaderEnv, email: Email, files: InFile[]): 
     const bodyText = email.bodyIsHtml ? await toText(env, "body.html", email.body, "text/html") : email.body;
     const head = [email.subject, bodyText].filter(Boolean).join("\n\n");
     const pdfs = files.filter((f) => f.contentType === "application/pdf");
-    const pdfTexts = await Promise.all(pdfs.map((p) => toText(env, "receipt.pdf", p.data, p.contentType)));
+    const pdfTexts = (await Promise.all(pdfs.map((p) => toText(env, "receipt.pdf", p.data, p.contentType)))).map(splitJoinedBlocks);
 
     let state = head;
     let images: { content_type: string; base64: string }[] = [];

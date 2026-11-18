@@ -32,6 +32,8 @@ From the 2026-11-15 run:
 
 The repo copy was run on 2026-11-15 after the move and gave the same four totals. The run used 1,292,530 tokens over 153 calls, about $0.13.
 
+On 2026-11-18 the PDF text got a line break where a digit is followed directly by a capitalised word (`splitJoinedBlocks` in `src/read/pdf.ts`, mirrored in `clairic_test.py`). The 11 invoice2data PDFs were run again: total 10 of 10, date 9 of 11 and currency 9 of 11 as before; supplier 4 of 11, was 5 of 11 (`SammyMaystoneLinesTest` changed).
+
 The eval also scores two image sets that have no pass mark: CORD phone photos (12 of 19 totals; the misses are Indonesian thousands separators) and invoice page images (19 of 20 totals). The Worker's confidence gate covers these: at confidence 0.7 or more, 2 of 122 totals were wrong.
 
 ## Where the eval differs from the Worker
