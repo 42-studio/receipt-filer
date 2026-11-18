@@ -13,6 +13,8 @@ export default defineConfig({
         miniflare: {
           bindings: {
             TEST_MIGRATIONS: migrations,
+            // Tests never use the deployed API URL: they pin the sandbox, whatever wrangler.jsonc says.
+            FREEAGENT_BASE_URL: "https://api.sandbox.freeagent.com/v2",
             FORWARD_ADDRESS: "receipts-k3v9x2@example.com",
             ALLOWED_SENDERS: "josh@example.com",
             NOTIFY_TO: "owner@example.com",

@@ -26,7 +26,7 @@
   "send_email": [{ "name": "EMAIL" }],
   // FORWARD_ADDRESS, ALLOWED_SENDERS, NOTIFY_TO and OWNER_EMAIL are Worker secrets (wrangler secret put), never vars.
   "vars": {
-    "FREEAGENT_BASE_URL": "https://api.sandbox.freeagent.com/v2",
+    "FREEAGENT_BASE_URL": "https://api.freeagent.com/v2",
     "CLAIRIC_MODEL": "@cf/cloudflare/clairic",
     "APP_URL": "https://receipts.42.studio"
   }

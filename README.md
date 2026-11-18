@@ -19,7 +19,7 @@ Run these steps in this order. Every command runs from the repo folder.
    - `NOTIFY_TO`: the address that gets the notifications.
    - `OWNER_EMAIL`: the only email that Cloudflare Access lets into the UI.
    - `FREEAGENT_CLIENT_ID` and `FREEAGENT_CLIENT_SECRET`: from the FreeAgent developer app.
-5. Set `APP_URL` in `wrangler.jsonc` to the Worker's URL. When you are ready for the real company, set `FREEAGENT_BASE_URL` to `https://api.freeagent.com/v2`. The default is the sandbox.
+5. Set `APP_URL` in `wrangler.jsonc` to the Worker's URL. `FREEAGENT_BASE_URL` selects the FreeAgent company: `https://api.freeagent.com/v2` is the real one, `https://api.sandbox.freeagent.com/v2` is the sandbox. Test against the sandbox first. After a change, deploy and reconnect FreeAgent on the Settings page.
 6. Deploy: `npx wrangler deploy`. The Images binding needs Images enabled on the Cloudflare account.
 7. Switch on Cloudflare Access for the Worker. Make the owner's email the only allowed identity.
 8. In Email Routing, verify the `NOTIFY_TO` address as a destination address. The Worker cannot send to an unverified address.
