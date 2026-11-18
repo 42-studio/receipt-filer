@@ -341,7 +341,8 @@ it("settings shows the forwarding address and the connection status", async () =
   let html = await (await call("/settings")).text();
   expect(html).toContain("receipts-k3v9x2@example.com");
   expect(html).toContain("Not connected");
-  expect(html).toContain("/oauth/start");
+  expect(html).toContain('href="/oauth/start"');
+  expect(html).not.toContain('action="/oauth/start"'); // a form here is blocked by form-action when it redirects to FreeAgent
   await setSetting(env.DB, "freeagent_tokens", "{}");
   html = await (await call("/settings")).text();
   expect(html).toContain("Connected");

@@ -239,7 +239,8 @@ export function createApp(partial: Partial<AppDeps> = {}) {
           <Field k="Forwarding address">{c.env.FORWARD_ADDRESS || "not set"}</Field>
           <Field k="FreeAgent">{connected ? "Connected" : "Not connected"} <span class="muted">({c.env.FREEAGENT_BASE_URL})</span></Field>
         </dl>
-        <form method="get" action="/oauth/start"><button>{connected ? "Reconnect FreeAgent" : "Connect FreeAgent"}</button></form>
+        {/* a link, not a form: form-action 'self' blocks the redirect to FreeAgent after a form submit */}
+        <p><a class="btn" href="/oauth/start">{connected ? "Reconnect FreeAgent" : "Connect FreeAgent"}</a></p>
       </Layout>);
   });
 
