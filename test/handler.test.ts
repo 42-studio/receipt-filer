@@ -80,12 +80,21 @@ it("rejects other senders and stores nothing", async () => {
   expect(m.setReject).toHaveBeenCalledOnce();
   expect(await listReceipts(env.DB)).toHaveLength(0);
 });
-it("forwards a Gmail forwarding confirmation to NOTIFY_TO and stores nothing", async () => {
+it("sends a Gmail forwarding confirmation to NOTIFY_TO as a new email and stores nothing", async () => {
+  const send = vi.mocked(testEnv.EMAIL.send);
+  send.mockClear();
+  const m = fake(pdfAttached, "forwarding-noreply@google.com");
+  await handleEmail(m, testEnv, ctx);
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({ to: "owner@example.com", from: "notifications@example.org", subject: "Receipt filer: Your receipt from Pixelgrove" }));
+  expect(m.forward).not.toHaveBeenCalled();
+  expect(m.setReject).not.toHaveBeenCalled();
+  expect(await listReceipts(env.DB)).toHaveLength(0);
+});
+it("forwards the Gmail confirmation when the new email cannot be sent", async () => {
+  vi.mocked(testEnv.EMAIL.send).mockRejectedValueOnce(new Error("send failed"));
   const m = fake(pdfAttached, "forwarding-noreply@google.com");
   await handleEmail(m, testEnv, ctx);
   expect(m.forward).toHaveBeenCalledWith("owner@example.com");
-  expect(m.setReject).not.toHaveBeenCalled();
-  expect(await listReceipts(env.DB)).toHaveLength(0);
 });
 it("drops a repeated Message-ID", async () => {
   const next = vi.fn(async () => {});
@@ -182,12 +191,13 @@ it("drops the tool's own notifications forwarded back, with no row and no notifi
   for (const raw of [
     notice(` ${FORWARD.toUpperCase()} `.trim(), "Receipt filer: Could not read - Acme"),
     notice("someone@example.com", "Fwd: Re: FW: Receipt filer: Choose a match - Acme"),
+    notice("Notifications@example.org", "Acme"),
   ]) {
     const m = fake(raw, "josh+caf_=receipts=example.org@example.com");
     await handleEmail(m, testEnv, ctx, undefined, notifyFn);
     expect(m.setReject).not.toHaveBeenCalled();
   }
-  expect(log).toHaveBeenCalledTimes(2);
+  expect(log).toHaveBeenCalledTimes(3);
   log.mockRestore();
   expect(await listReceipts(env.DB)).toHaveLength(0);
   expect(notifyFn).not.toHaveBeenCalled();

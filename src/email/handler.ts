@@ -1,6 +1,6 @@
 import { addEvent, addFile, createReceipt, findByMessageId, findDuplicateFile, updateReceipt } from "../db";
 import { MAX_BODY_CHARS, type Env } from "../env";
-import { notify, SUBJECT_PREFIX, type Notify } from "../notify";
+import { notify, senderAddress, SUBJECT_PREFIX, type Notify } from "../notify";
 import { parseEmail, selectReceiptFiles } from "./parse";
 
 const GMAIL_CONFIRMATION = "forwarding-noreply@google.com";
@@ -20,8 +20,21 @@ export function isAllowedSender(envelopeFrom: string, allowed: string[]): boolea
 // Our own notification, forwarded back (for example by a wide Gmail rule): storing it would send another notification.
 export function isOwnNotification(from: string, subject: string, forwardAddress: string): boolean {
   const own = forwardAddress.trim().toLowerCase();
-  if (own && from.trim().toLowerCase() === own) return true;
+  const f = from.trim().toLowerCase();
+  if (own && (f === own || f === senderAddress(own))) return true;
   return subject.replace(/^\s*(?:(?:fwd?|re)\s*:\s*)*/i, "").toLowerCase().startsWith(SUBJECT_PREFIX.toLowerCase());
+}
+
+// A new email so it is addressed to NOTIFY_TO: forward() keeps To: as the forwarding address.
+async function sendConfirmation(message: ForwardableEmailMessage, env: Env): Promise<void> {
+  try {
+    const e = await parseEmail(await new Response(message.raw).arrayBuffer());
+    const body = e.bodyIsHtml ? { html: e.body } : { text: e.body };
+    await env.EMAIL.send({ to: env.NOTIFY_TO, from: senderAddress(env.FORWARD_ADDRESS), subject: `${SUBJECT_PREFIX} ${e.subject}`, ...body });
+  } catch (err) {
+    console.error("confirmation send failed, forwarding it instead", err); // the confirmation must not be lost
+    await message.forward(env.NOTIFY_TO);
+  }
 }
 
 async function sha256Hex(data: Uint8Array): Promise<string> {
@@ -36,7 +49,7 @@ export async function handleEmail(
   next?: (receiptId: string) => Promise<void>,
   notifyFn: Notify = notify,
 ): Promise<void> {
-  if (isGmailForwardingConfirmation(message.from)) return void (await message.forward(env.NOTIFY_TO));
+  if (isGmailForwardingConfirmation(message.from)) return sendConfirmation(message, env);
   if (!isAllowedSender(message.from, (env.ALLOWED_SENDERS ?? "").split(",").filter((a) => a.trim()))) {
     console.warn("rejected sender", message.from);
     return message.setReject("Sender not allowed");

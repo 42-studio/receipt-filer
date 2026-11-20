@@ -8,6 +8,9 @@ export type Notify = (env: NotifyEnv, kind: Kind, receipt?: Receipt) => Promise<
 /** Every notification subject starts with this; the email handler drops mail that carries it. */
 export const SUBJECT_PREFIX = "Receipt filer:";
 
+/** Every email to NOTIFY_TO comes from notifications@ on the forwarding address's domain. */
+export const senderAddress = (forwardAddress: string) => `notifications@${forwardAddress.trim().split("@").pop()}`;
+
 /** The reason the runner stores when an attach may or may not have been saved. */
 export const UNCONFIRMED = "FreeAgent did not confirm the attachment. Check the transaction in FreeAgent before you press Retry.";
 
@@ -55,7 +58,7 @@ export async function notify(env: NotifyEnv, kind: Kind, receipt?: Receipt, now:
       if (!env[key]?.trim()) return console.error(`notify skipped: the ${key} secret is not set`, kind);
     }
     const { subject, text } = compose(kind, receipt, env.APP_URL);
-    await env.EMAIL.send({ to: env.NOTIFY_TO, from: env.FORWARD_ADDRESS, subject, text });
+    await env.EMAIL.send({ to: env.NOTIFY_TO, from: senderAddress(env.FORWARD_ADDRESS), subject, text });
 
     if (kind === "reconnect") await setSetting(env.DB, "reconnect_notified_at", now().toISOString());
     else await updateReceipt(env.DB, receipt!.id, { notified: [...sent, kind] });

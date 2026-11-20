@@ -22,7 +22,7 @@ it("sends one email per receipt and kind", async () => {
   await notify(e, "could_not_read", r);
   await notify(e, "could_not_read", (await getReceipt(env.DB, r.id))!);
   expect(send).toHaveBeenCalledOnce();
-  expect(send).toHaveBeenCalledWith(expect.objectContaining({ to: "owner@example.com", from: "receipts@example.org" }));
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({ to: "owner@example.com", from: "notifications@example.org" }));
   expect((await getReceipt(env.DB, r.id))!.notified).toEqual(["could_not_read"]);
 });
 it("emails for no_attachment, file_too_large and unreadable_file", async () => {
