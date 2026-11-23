@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "npm run build && wrangler deploy",
     "types": "wrangler types",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit && npm --prefix ui run typecheck",
+    "test": "vitest run",
+    "dev:ui": "node dev/start.mjs",
+    "build": "npm --prefix ui run build",
+    "pretest": "test -d ui/dist || npm run build",
+    "dev:worker": "npm run build && wrangler d1 migrations apply DB --local -c dev/wrangler.jsonc --persist-to .wrangler/dev-ui && wrangler dev -c dev/wrangler.jsonc --persist-to .wrangler/dev-ui --port 8788"
   },
   "dependencies": {
     "hono": "^4.13.18",

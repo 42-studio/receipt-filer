@@ -1,0 +1,21 @@
+// Local UI playground only (npm run dev:ui). Never deployed: no routes, fake values, local D1 and R2.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "receipt-filer-dev-ui",
+  "main": "worker.ts",
+  "workers_dev": false,
+  "compatibility_date": "2026-11-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "access": { "dev": { "aud": "dev", "identity": { "email": "owner@example.com" } } },
+  "assets": { "directory": "../ui/dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
+  "d1_databases": [{ "binding": "DB", "database_name": "receipt-filer-dev-ui", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "../migrations" }],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "receipt-filer-dev-ui" }],
+  "vars": {
+    "FREEAGENT_BASE_URL": "https://api.sandbox.freeagent.com/v2",
+    "APP_URL": "http://localhost:8788",
+    "OWNER_EMAIL": "owner@example.com",
+    "FORWARD_ADDRESS": "receipts-k3v9x2@example.com",
+    "ALLOWED_SENDERS": "josh@example.com",
+    "NOTIFY_TO": "josh@example.com"
+  }
+}
