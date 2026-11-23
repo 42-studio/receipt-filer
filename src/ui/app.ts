@@ -33,6 +33,14 @@ const STATE_LABEL: Record<State, string> = {
   reading: "Reading", could_not_read: "Could not read", duplicate: "Duplicate", waiting_payment: "Waiting for payment",
   needs_choice: "Needs your choice", waiting_explanation: "Matched, waiting for explanation", filed: "Filed", failed: "Failed",
 };
+// The one action each state asks of you, shown as its button; the rest of `ACTIONS` go in its menu.
+// States not listed need nothing: they move on by themselves.
+const PRIMARY: Partial<Record<State, { action: Action; label: string }>> = {
+  failed: { action: "retry", label: "Retry" },
+  could_not_read: { action: "match", label: "Match by hand" },
+  needs_choice: { action: "match", label: "Choose bank line" },
+  duplicate: { action: "delete", label: "Delete" },
+};
 const STATE_TONE: Record<State, Tone> = {
   reading: "info", could_not_read: "warn", duplicate: "neutral", waiting_payment: "info",
   needs_choice: "warn", waiting_explanation: "info", filed: "ok", failed: "bad",
@@ -58,7 +66,8 @@ const row = (r: Receipt): ReceiptRow => ({
   id: r.id, title: r.supplier || r.subject || "(no subject)", subject: r.subject, supplier: r.supplier,
   amount: money(r.totalMinor, r.currency), received: r.receivedAt.slice(0, 10),
   state: r.state, stateLabel: STATE_LABEL[r.state], tone: STATE_TONE[r.state],
-  reason: r.reason ? (REASON_LABEL[r.reason] ?? r.reason) : null, actions: ACTIONS[r.state], duplicateOf: r.duplicateOf,
+  reason: r.reason ? (REASON_LABEL[r.reason] ?? r.reason) : null, actions: ACTIONS[r.state], primary: PRIMARY[r.state] ?? null,
+  matchLabel: r.state === "waiting_explanation" ? "Change bank line" : "Match by hand", duplicateOf: r.duplicateOf,
   totalMinor: r.totalMinor, currency: r.currency, filedAt: r.filedAt, pinnedBy: r.pinnedBy,
 });
 const detail = (r: Receipt): ReceiptDetail => ({

@@ -119,6 +119,20 @@ it("lists open receipts before filed ones with their actions", async () => {
   expect((await json<ListResponse>("/api/receipts")).receipts[0].amount).toBe("GBP 12,345,678.90"); // thousands grouped
 });
 
+it("names one guided action for each state that needs one, from the actions it allows", async () => {
+  const { json } = setup();
+  const expected: Record<string, [string, string] | null> = {
+    reading: null, could_not_read: ["match", "Match by hand"], duplicate: ["delete", "Delete"], waiting_payment: null,
+    needs_choice: ["match", "Choose bank line"], waiting_explanation: null, filed: null, failed: ["retry", "Retry"],
+  };
+  for (const [state, want] of Object.entries(expected)) {
+    const r = await make({ state: state as never });
+    const { receipt } = await json<ReceiptResponse>(`/api/receipts/${r.id}`);
+    expect(receipt.primary && [receipt.primary.action, receipt.primary.label], state).toEqual(want);
+    expect(receipt.matchLabel, state).toBe(state === "waiting_explanation" ? "Change bank line" : "Match by hand");
+  }
+});
+
 it("offers only the actions the state allows", async () => {
   const { call, json } = setup();
   const table: Record<string, string[]> = {
@@ -127,7 +141,9 @@ it("offers only the actions the state allows", async () => {
   };
   for (const [state, allowed] of Object.entries(table)) {
     const r = await make({ state: state as never });
-    expect((await json<ReceiptResponse>(`/api/receipts/${r.id}`)).receipt.actions, state).toEqual(allowed);
+    const { receipt } = await json<ReceiptResponse>(`/api/receipts/${r.id}`);
+    expect(receipt.actions, state).toEqual(allowed);
+    if (receipt.primary) expect(allowed, `${state} primary`).toContain(receipt.primary.action);
     expect((await call(`/api/receipts/${r.id}/match`)).status, `${state} GET match`).toBe(allowed.includes("match") ? 200 : 409);
     if (!allowed.includes("retry")) expect((await call(`/api/receipts/${r.id}/retry`, { method: "POST" })).status, `${state} retry`).toBe(409);
     if (!allowed.includes("delete")) expect((await call(`/api/receipts/${r.id}`, { method: "DELETE" })).status, `${state} delete`).toBe(409);

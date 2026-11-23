@@ -15,6 +15,8 @@ export interface ReceiptRow {
   tone: Tone;
   reason: string | null;
   actions: Action[];
+  primary: { action: Action; label: string } | null; // the one action this state asks of you; always one of `actions`
+  matchLabel: string; // what the match action is called in this state
   duplicateOf: string | null;
   totalMinor: number | null; // for sums; `amount` is the display form
   currency: string | null;

@@ -13,16 +13,7 @@ import {
 import { api, notifyChanged, type ApiError } from "@/lib/api";
 import { useReceiptNav } from "@/lib/nav";
 
-// The one thing each state asks of you. States not listed need nothing: they move on by themselves.
-const PRIMARY: Record<string, { action: Action; label: string }> = {
-  failed: { action: "retry", label: "Retry" },
-  could_not_read: { action: "match", label: "Match by hand" },
-  needs_choice: { action: "match", label: "Choose bank line" },
-  duplicate: { action: "delete", label: "Delete" },
-};
-
 const ICON: Record<Action, ReactNode> = { match: <LinkIcon aria-hidden />, retry: <RotateCwIcon aria-hidden />, delete: <Trash2Icon aria-hidden /> };
-const matchLabel = (r: ReceiptRow) => (r.state === "waiting_explanation" ? "Change bank line" : "Match by hand");
 
 /** Retry and delete with their busy state and the delete confirmation; match opens the match dialog. */
 function useReceiptActions(r: ReceiptRow, onDeleted?: () => void) {
@@ -87,7 +78,8 @@ function useReceiptActions(r: ReceiptRow, onDeleted?: () => void) {
 export function ReceiptActions({ r, inDetails = false, size = "sm" }: { r: ReceiptRow; inDetails?: boolean; size?: "sm" | "default" }) {
   const nav = useReceiptNav();
   const { busy, run, confirm } = useReceiptActions(r, inDetails ? nav.closeAll : undefined);
-  const primary = PRIMARY[r.state];
+  // which action is the guided one, and what it is called, come from the API (src/ui/app.ts)
+  const primary = r.primary && r.actions.includes(r.primary.action) ? r.primary : null;
   const others = r.actions.filter((a) => a !== primary?.action);
 
   return (
@@ -112,7 +104,7 @@ export function ReceiptActions({ r, inDetails = false, size = "sm" }: { r: Recei
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           {!inDetails && <DropdownMenuItem onSelect={() => nav.open(r.id)}><EyeIcon aria-hidden />View details</DropdownMenuItem>}
-          {others.includes("match") && <DropdownMenuItem onSelect={() => run("match")}><LinkIcon aria-hidden />{matchLabel(r)}</DropdownMenuItem>}
+          {others.includes("match") && <DropdownMenuItem onSelect={() => run("match")}><LinkIcon aria-hidden />{r.matchLabel}</DropdownMenuItem>}
           {others.includes("retry") && <DropdownMenuItem onSelect={() => run("retry")}><RotateCwIcon aria-hidden />Read again</DropdownMenuItem>}
           {others.includes("delete") && (
             <>
