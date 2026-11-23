@@ -23,18 +23,24 @@ const CHANGED = "receipts:changed";
 // Deferred: a dialog that just closed itself must unmount before the views reload.
 export const notifyChanged = () => setTimeout(() => window.dispatchEvent(new Event(CHANGED)));
 
-/** Loads a GET endpoint; reload() fetches it again, keeping the old data on screen meanwhile. Reloads after notifyChanged(). */
+/**
+ * Loads a GET endpoint; reload() fetches it again, keeping the old data on screen meanwhile. Reloads after notifyChanged().
+ * Data and errors belong to the path they came from: a new path shows nothing (loading) until its own answer arrives.
+ */
 export function useApi<T>(path: string, { live = true }: { live?: boolean } = {}) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<ApiError | null>(null);
+  const [result, setResult] = useState<{ path: string; data: T | null; error: ApiError | null }>({ path, data: null, error: null });
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    let live = true;
+    let current = true;
     api<T>(path).then(
-      (d) => { if (live) { setData(d); setError(null); } },
-      (e: unknown) => { if (live) setError(e instanceof ApiError ? e : new ApiError(String(e), 0)); },
+      (d) => { if (current) setResult({ path, data: d, error: null }); },
+      (e: unknown) => {
+        const error = e instanceof ApiError ? e : new ApiError(String(e), 0);
+        // a failed reload keeps this path's data; a failed new path shows only its error
+        if (current) setResult((r) => ({ path, data: r.path === path ? r.data : null, error }));
+      },
     );
-    return () => { live = false; };
+    return () => { current = false; };
   }, [path, tick]);
   const reload = useCallback(() => setTick((t) => t + 1), []);
   useEffect(() => {
@@ -42,5 +48,8 @@ export function useApi<T>(path: string, { live = true }: { live?: boolean } = {}
     window.addEventListener(CHANGED, reload);
     return () => window.removeEventListener(CHANGED, reload);
   }, [reload, live]);
+  const mine = result.path === path;
+  const data = mine ? result.data : null;
+  const error = mine ? result.error : null;
   return { data, error, reload, loading: data === null && error === null };
 }
