@@ -11,7 +11,7 @@ Receipt filer has one user, the owner. It holds FreeAgent OAuth tokens that can 
 ### Access
 
 1. Only the owner reaches the app. Every request, including `/health`, the API and the UI's static files, passes the owner check in `src/ui/app.ts`: a Cloudflare Access identity whose email equals `OWNER_EMAIL`. A missing identity, another email, or a blank `OWNER_EMAIL` gets 403. `run_worker_first` in `wrangler.jsonc` keeps the static files behind this check.
-2. A request that changes data uses a method other than GET, and its `Origin` must equal the request's own origin.
+2. A request that changes data uses a method other than GET, and its `Origin` must equal the request's own origin. The one exception is the OAuth pair, because the protocol needs GET: `/oauth/start` is a link (a form's `form-action` would block the redirect to FreeAgent) and FreeAgent returns to `/oauth/callback` with a GET. The `state` parameter is what protects them (rule 9). The most a forged visit to `/oauth/start` can do is replace the state of a sign-in already in progress, which then has to start again.
 3. The UI page's Content-Security-Policy allows scripts and styles from the Worker's own origin only (plus inline style attributes), and `frame-ancestors 'none'`.
 
 ### Email content is untrusted
@@ -24,14 +24,14 @@ Receipt filer has one user, the owner. It holds FreeAgent OAuth tokens that can 
 
 ### FreeAgent
 
-9. The OAuth `state` is random, single use, and expires after 10 minutes. Tokens are stored only in the D1 `settings` table.
+9. The OAuth `state` is random, single use, and expires after 10 minutes. Using it is atomic: the callback deletes the exact stored value and goes on only if that delete removed it, so two racing callbacks cannot both exchange a code. Tokens are stored only in the D1 `settings` table.
 10. A bank line URL from the browser is checked (`ownLine`) to be `FREEAGENT_BASE_URL/bank_transactions/<digits>` before the Worker calls it with the owner's token.
 
 ### Secrets and development
 
 11. Secrets (`FORWARD_ADDRESS`, `ALLOWED_SENDERS`, `NOTIFY_TO`, `OWNER_EMAIL`, `FREEAGENT_CLIENT_ID`, `FREEAGENT_CLIENT_SECRET`) are Worker secrets. They are never in `wrangler.jsonc` vars, code, logs or tests; tests use example values. `.dev.vars` is ignored by git.
 12. The `dev/` playground and its `/__*` routes exist only in the dev Worker (`dev/wrangler.jsonc`), which is never deployed. The UI loads its dev panel only on `localhost`, and shows it only when the dev Worker answers.
-13. Errors shown to the user are plain messages. Details go to the Worker log only.
+13. A request that fails answers with a plain message; the exception's details go to the Worker log only. A receipt's stored reason is different on purpose: a failed receipt shows FreeAgent's own error text to the owner, because that text says what to fix in FreeAgent. Neither may ever contain a token or a secret.
 
 ## Out of scope
 

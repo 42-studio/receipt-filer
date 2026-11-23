@@ -155,11 +155,15 @@ export function createApp(partial: Partial<AppDeps> = {}) {
 
   // Errors go back to Settings as a fixed code, never free text, so a crafted link cannot put words on the page.
   app.get("/oauth/callback", async (c) => {
-    const [state, at] = ((await getSetting(c.env.DB, "oauth_state")) ?? "").split(".");
+    const stored = await getSetting(c.env.DB, "oauth_state");
+    const [state, at] = (stored ?? "").split(".");
     const given = c.req.query("state");
     const code = c.req.query("code");
     if (!state || !given || given !== state || Date.now() - Number(at) > STATE_TTL_MS) return c.redirect("/settings?oauth=invalid", 303);
-    await c.env.DB.prepare("DELETE FROM settings WHERE key = 'oauth_state'").run(); // single use
+    // Single use, atomically: only the callback whose delete removes this exact value goes on. A second callback racing
+    // it, or an old one after a newer start replaced the state, deletes nothing and stops here.
+    const taken = await c.env.DB.prepare("DELETE FROM settings WHERE key = 'oauth_state' AND value = ?").bind(stored).run();
+    if (taken.meta.changes !== 1) return c.redirect("/settings?oauth=invalid", 303);
     if (!code) return c.redirect("/settings?oauth=no_code", 303);
     await d.fa.exchangeCode(c.env, code, redirectUri(c));
     return c.redirect("/settings?oauth=connected", 303);

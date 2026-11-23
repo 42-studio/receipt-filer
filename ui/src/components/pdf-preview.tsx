@@ -5,6 +5,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type PdfJs = typeof import("pdfjs-dist");
+// pdf.js's decoders (JPEG 2000 and JBIG2 scans, colour profiles), CMaps and standard fonts, copied from pdfjs-dist
+// into public/pdfjs by vite.config.ts and served from this origin, behind the owner check like everything else.
+const ASSETS = { wasmUrl: "/pdfjs/wasm/", cMapUrl: "/pdfjs/cmaps/", cMapPacked: true, standardFontDataUrl: "/pdfjs/standard_fonts/", iccUrl: "/pdfjs/iccs/" };
 let pdfjs: Promise<PdfJs> | null = null;
 /** pdf.js loads on the first preview only: it is large, and most pages never show a PDF. */
 function loadPdfJs() {
@@ -43,12 +46,13 @@ export function PdfPreview({ url, filename, className }: { url: string; filename
     setState("loading");
     loadPdfJs()
       .then((lib) => {
-        const loading = lib.getDocument({ url, useSystemFonts: true, isOffscreenCanvasSupported: false });
+        if (cancelled) return null; // closed while pdf.js was still loading: start nothing
+        const loading = lib.getDocument({ url, isOffscreenCanvasSupported: false, ...ASSETS });
         task = loading; // destroying the loading task frees the document and its worker
         return loading.promise;
       })
       .then((pdf) => {
-        if (cancelled) return;
+        if (!pdf || cancelled) return;
         setDoc(pdf);
         setCount(pdf.numPages);
       })

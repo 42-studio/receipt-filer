@@ -385,6 +385,23 @@ it("the OAuth start stores a state and the callback exchanges the code once", as
   expect(fa.exchangeCode).toHaveBeenCalledTimes(1);
 });
 
+it("the OAuth state is used once even when two callbacks race", async () => {
+  const { call, fa } = setup();
+  const state = new URL((await call("/oauth/start")).headers.get("location")!).searchParams.get("state")!;
+  const [a, b] = await Promise.all([call(`/oauth/callback?code=one&state=${state}`), call(`/oauth/callback?code=two&state=${state}`)]);
+  expect([a.headers.get("location"), b.headers.get("location")].sort()).toEqual(["/settings?oauth=connected", "/settings?oauth=invalid"]);
+  expect(fa.exchangeCode).toHaveBeenCalledTimes(1);
+});
+
+it("an old OAuth callback cannot use up a newer sign-in's state", async () => {
+  const { call, fa } = setup();
+  const first = new URL((await call("/oauth/start")).headers.get("location")!).searchParams.get("state")!;
+  const second = new URL((await call("/oauth/start")).headers.get("location")!).searchParams.get("state")!;
+  expect((await call(`/oauth/callback?code=old&state=${first}`)).headers.get("location")).toBe("/settings?oauth=invalid");
+  expect((await call(`/oauth/callback?code=new&state=${second}`)).headers.get("location")).toBe("/settings?oauth=connected");
+  expect(fa.exchangeCode).toHaveBeenCalledTimes(1);
+});
+
 it("the OAuth callback rejects a wrong state", async () => {
   const { call, fa } = setup();
   await call("/oauth/start");

@@ -163,14 +163,19 @@ function UpNext({ items, index, onSelect }: { items: ReceiptRow[]; index: number
 
 /** One receipt in full: the receipt itself, what went wrong, what to do, and the button to do it. */
 function Focus({ r }: { r: ReceiptRow }) {
-  const { data } = useApi<ReceiptResponse>(`/api/receipts/${r.id}`, { live: false });
+  const { data, error, reload } = useApi<ReceiptResponse>(`/api/receipts/${r.id}`, { live: false });
   const nav = useReceiptNav();
   const Icon = guideFor(r).icon;
   return (
     <div className="flex flex-wrap gap-6 p-5">
       {/* on a phone, what is wrong and the button come first; the receipt follows */}
       <div className="order-2 flex h-[22rem] min-w-0 flex-[1_1_300px] flex-col rounded-lg bg-muted/50 p-3 md:order-1 md:h-[26rem]">
-        {data ? <ReceiptViewer files={data.files} email={data.email} className="flex-1" /> : <Skeleton className="flex-1" />}
+        {data ? <ReceiptViewer files={data.files} email={data.email} className="flex-1" /> : error ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
+            <p>The receipt could not be loaded. {error.message}</p>
+            <Button variant="outline" size="sm" onClick={reload}>Try again</Button>
+          </div>
+        ) : <Skeleton className="flex-1" />}
       </div>
 
       <div className="order-1 flex min-w-0 flex-[1_1_300px] flex-col gap-4 md:order-2">
