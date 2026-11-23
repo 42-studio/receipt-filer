@@ -1,0 +1,218 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    /* chart series: categorical slots 1-3, checked with the dataviz validator on the card surface */
+    --viz-1: #2a78d6;
+    --viz-2: #eb6834;
+    --viz-3: #1baf7a;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-3: #199e70;
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+    }
+  html {
+    @apply font-sans;
+    scroll-padding-top: 4.5rem; /* the sticky header must not cover a focused control */
+    }
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+/* Reading: the one "live" group. A light sweeps its border, a scan line runs down each receipt, a bar sweeps underneath. */
+@keyframes reading-border { to { background-position: -200% 0; } }
+@keyframes reading-scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(260%); } }
+@keyframes reading-sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@keyframes reading-dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
+
+.reading-frame {
+  background: linear-gradient(90deg, var(--color-blue-500) 0%, var(--color-sky-300) 25%, var(--color-blue-500) 50%, var(--color-sky-300) 75%, var(--color-blue-500) 100%);
+  background-size: 200% 100%;
+  animation: reading-border 4s linear infinite;
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--color-blue-500) 12%, transparent), 0 8px 24px -12px color-mix(in oklch, var(--color-blue-500) 45%, transparent);
+}
+.scan-line {
+  background: linear-gradient(to bottom, transparent, color-mix(in oklch, var(--color-blue-500) 45%, transparent), transparent);
+  animation: reading-scan 1.6s ease-in-out infinite;
+}
+.progress-sweep { animation: reading-sweep 1.4s ease-in-out infinite; }
+.reading-dots::after { content: "..."; display: inline-block; width: 1.2em; text-align: left; animation: reading-dots 1.2s steps(1) infinite; }
+
+/* A receipt feeding out of a till printer: it slides down from the slot, a scan line reads it, it feeds again. */
+@keyframes receipt-feed {
+  0% { transform: translateY(-100%); opacity: 1; }
+  45%, 85% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(8%); opacity: 0; }
+}
+@keyframes receipt-scan { 0%, 40% { transform: translateY(-100%); opacity: 0; } 50% { opacity: 1; } 85% { transform: translateY(400%); opacity: 1; } 100% { transform: translateY(400%); opacity: 0; } }
+.receipt-paper {
+  /* the torn, zig-zag bottom edge of till paper */
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 3px), 87.5% 100%, 75% calc(100% - 3px), 62.5% 100%, 50% calc(100% - 3px), 37.5% 100%, 25% calc(100% - 3px), 12.5% 100%, 0 calc(100% - 3px));
+  animation: receipt-feed 2.6s cubic-bezier(0.3, 0.7, 0.3, 1) infinite backwards;
+}
+/* the clip cuts off borders, so the outline is a drop shadow that follows the torn edge */
+.receipt-slot { filter: drop-shadow(0 0 0.6px rgb(0 0 0 / 0.55)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.12)); }
+.receipt-scan {
+  background: linear-gradient(to bottom, transparent, color-mix(in oklch, var(--color-blue-500) 55%, transparent), transparent);
+  animation: receipt-scan 2.6s ease-in-out infinite backwards;
+}
+
+/* Moving between Dashboard, Queue and Settings slides the page under the header to the side, in nav order
+   (App.tsx sets data-swipe; the nav links use React Router's viewTransition). */
+main#main { view-transition-name: page; }
+::view-transition-old(page), ::view-transition-new(page) {
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); animation-fill-mode: both;
+  height: 100%; object-fit: none; object-position: top; mix-blend-mode: normal; transform-origin: 50% 20%;
+}
+/* the old page leaves a little faster than the new one arrives */
+::view-transition-old(page) { animation-duration: 260ms; }
+::view-transition-new(page) { animation-duration: 420ms; }
+:root[data-swipe="next"]::view-transition-old(page) { animation-name: page-swipe-out-left; }
+:root[data-swipe="next"]::view-transition-new(page) { animation-name: page-swipe-in-right; }
+:root[data-swipe="prev"]::view-transition-old(page) { animation-name: page-swipe-out-right; }
+:root[data-swipe="prev"]::view-transition-new(page) { animation-name: page-swipe-in-left; }
+/* "page-" prefix: Sonner injects its own swipe-out-left/right keyframes at runtime */
+/* a shorter slide that shrinks a touch and fades, so the pages hand over instead of shoving each other */
+@keyframes page-swipe-out-left { to { transform: translateX(-18%) scale(0.96); opacity: 0; } }
+@keyframes page-swipe-in-right { from { transform: translateX(18%) scale(0.96); opacity: 0; } }
+@keyframes page-swipe-out-right { to { transform: translateX(18%) scale(0.96); opacity: 0; } }
+@keyframes page-swipe-in-left { from { transform: translateX(-18%) scale(0.96); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* still: a solid border and full dots tell the same story */
+  .reading-frame { animation: none; background: var(--color-blue-500); }
+  .scan-line, .progress-sweep, .receipt-scan { display: none; }
+  .receipt-paper { animation: none; }
+  .reading-dots::after { animation: none; content: "..."; }
+}

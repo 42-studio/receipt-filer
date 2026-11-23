@@ -10,6 +10,8 @@
   "compatibility_flags": ["nodejs_compat"],
   // Local dev only: wrangler dev answers ctx.access.getIdentity() with this person. Copy .dev.vars.example to .dev.vars for dev.
   "access": { "dev": { "aud": "dev", "identity": { "email": "owner@example.com" } } },
+  // The React UI (ui/, built by npm run build). The Worker runs first so the Access owner check covers these files too.
+  "assets": { "directory": "./ui/dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
   "observability": { "enabled": true, "traces": { "enabled": true } },
   "triggers": { "crons": ["*/15 * * * *"] },
   "d1_databases": [
