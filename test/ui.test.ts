@@ -119,6 +119,12 @@ it("lists open receipts before filed ones with their actions", async () => {
   expect((await json<ListResponse>("/api/receipts")).receipts[0].amount).toBe("GBP 12,345,678.90"); // thousands grouped
 });
 
+// The UI groups and filters by stage only, so every state must land in the right one.
+const STAGES: Record<string, string> = {
+  reading: "reading", could_not_read: "needs_you", needs_choice: "needs_you", failed: "needs_you",
+  waiting_payment: "waiting", waiting_explanation: "waiting", filed: "filed", duplicate: "duplicate",
+};
+
 it("names one guided action for each state that needs one, from the actions it allows", async () => {
   const { json } = setup();
   const expected: Record<string, [string, string] | null> = {
@@ -130,6 +136,7 @@ it("names one guided action for each state that needs one, from the actions it a
     const { receipt } = await json<ReceiptResponse>(`/api/receipts/${r.id}`);
     expect(receipt.primary && [receipt.primary.action, receipt.primary.label], state).toEqual(want);
     expect(receipt.matchLabel, state).toBe(state === "waiting_explanation" ? "Change bank line" : "Match by hand");
+    expect(receipt.stage, state).toBe(STAGES[state]);
   }
 });
 

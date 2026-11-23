@@ -7,7 +7,7 @@ import { rateToGbp } from "../match/fx";
 import { decide } from "../match/matcher";
 import { runMatcher } from "../match/run";
 import { readReceipt } from "../read/reader";
-import type { Action, EmailInfo, FileInfo, ListResponse, MatchResponse, ReceiptDetail, ReceiptResponse, ReceiptRow, SettingsResponse, Tone } from "./api-types";
+import type { Action, EmailInfo, Stage, FileInfo, ListResponse, MatchResponse, ReceiptDetail, ReceiptResponse, ReceiptRow, SettingsResponse, Tone } from "./api-types";
 
 export interface AppDeps {
   fa: Pick<typeof freeagent, "listBankLines" | "getBankLine" | "authoriseUrl" | "exchangeCode" | "isConnected">;
@@ -41,6 +41,10 @@ const PRIMARY: Partial<Record<State, { action: Action; label: string }>> = {
   needs_choice: { action: "match", label: "Choose bank line" },
   duplicate: { action: "delete", label: "Delete" },
 };
+const STAGE: Record<State, Stage> = {
+  reading: "reading", could_not_read: "needs_you", needs_choice: "needs_you", failed: "needs_you",
+  waiting_payment: "waiting", waiting_explanation: "waiting", filed: "filed", duplicate: "duplicate",
+};
 const STATE_TONE: Record<State, Tone> = {
   reading: "info", could_not_read: "warn", duplicate: "neutral", waiting_payment: "info",
   needs_choice: "warn", waiting_explanation: "info", filed: "ok", failed: "bad",
@@ -65,7 +69,7 @@ const receiptDay = (r: Receipt) => r.receiptDate ?? r.emailDate?.slice(0, 10) ??
 const row = (r: Receipt): ReceiptRow => ({
   id: r.id, title: r.supplier || r.subject || "(no subject)", subject: r.subject, supplier: r.supplier,
   amount: money(r.totalMinor, r.currency), received: r.receivedAt.slice(0, 10),
-  state: r.state, stateLabel: STATE_LABEL[r.state], tone: STATE_TONE[r.state],
+  state: r.state, stateLabel: STATE_LABEL[r.state], tone: STATE_TONE[r.state], stage: STAGE[r.state],
   reason: r.reason ? (REASON_LABEL[r.reason] ?? r.reason) : null, actions: ACTIONS[r.state], primary: PRIMARY[r.state] ?? null,
   matchLabel: r.state === "waiting_explanation" ? "Change bank line" : "Match by hand", duplicateOf: r.duplicateOf,
   totalMinor: r.totalMinor, currency: r.currency, filedAt: r.filedAt, pinnedBy: r.pinnedBy,

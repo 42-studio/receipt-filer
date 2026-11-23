@@ -12,13 +12,12 @@ import { useApi } from "@/lib/api";
 import { useReceiptNav } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-const NEEDS_YOU = new Set(["failed", "could_not_read", "needs_choice"]);
 const VIEWS: { key: string; label: string; keep: (r: ReceiptRow) => boolean }[] = [
   { key: "all", label: "All", keep: () => true },
-  { key: "attention", label: "Needs you", keep: (r) => NEEDS_YOU.has(r.state) },
-  { key: "open", label: "Open", keep: (r) => r.state !== "filed" && r.state !== "duplicate" },
-  { key: "filed", label: "Filed", keep: (r) => r.state === "filed" },
-  { key: "duplicate", label: "Duplicates", keep: (r) => r.state === "duplicate" },
+  { key: "attention", label: "Needs you", keep: (r) => r.stage === "needs_you" },
+  { key: "open", label: "Open", keep: (r) => r.stage !== "filed" && r.stage !== "duplicate" },
+  { key: "filed", label: "Filed", keep: (r) => r.stage === "filed" },
+  { key: "duplicate", label: "Duplicates", keep: (r) => r.stage === "duplicate" },
 ];
 
 export function QueuePage() {

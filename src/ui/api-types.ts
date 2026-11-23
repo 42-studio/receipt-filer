@@ -2,6 +2,8 @@
 
 export type Action = "match" | "retry" | "delete";
 export type Tone = "info" | "warn" | "bad" | "ok" | "neutral";
+/** Where a receipt is on its way to being filed; the UI groups and filters by this, never by state. */
+export type Stage = "reading" | "needs_you" | "waiting" | "filed" | "duplicate";
 
 export interface ReceiptRow {
   id: string;
@@ -13,6 +15,7 @@ export interface ReceiptRow {
   state: string;
   stateLabel: string;
   tone: Tone;
+  stage: Stage;
   reason: string | null;
   actions: Action[];
   primary: { action: Action; label: string } | null; // the one action this state asks of you; always one of `actions`

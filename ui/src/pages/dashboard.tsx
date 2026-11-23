@@ -13,23 +13,26 @@ import { useApi } from "@/lib/api";
 import { useReceiptNav } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-// What each "needs you" state asks, in the order the dashboard works through them.
-const NEEDS: Record<string, { label: string; icon: LucideIcon; tone: "bad" | "warn"; steps: string[] }> = {
+// Dashboard guidance only: an icon and "what to do" steps for the receipts that need you, in the order they are
+// worked through. Which receipts need you, their labels and colours come from the API (stage, stateLabel, tone).
+const GUIDE: Record<string, { icon: LucideIcon; steps: string[] }> = {
   failed: {
-    label: "Failed", icon: OctagonAlertIcon, tone: "bad",
+    icon: OctagonAlertIcon,
     steps: ["Open the transaction in FreeAgent and check whether the receipt is attached.", "Not attached: retry. Attached: delete it here; FreeAgent keeps its copy."],
   },
   could_not_read: {
-    label: "Could not read", icon: FileQuestionIcon, tone: "warn",
+    icon: FileQuestionIcon,
     steps: ["Find the total and the date on the receipt.", "Match it by hand to the payment on your bank lines."],
   },
   needs_choice: {
-    label: "Needs your choice", icon: SplitIcon, tone: "warn",
+    icon: SplitIcon,
     steps: ["More than one bank line fits this receipt.", "Choose the one that is really its payment."],
   },
 };
-const ORDER = Object.keys(NEEDS);
-const WAITING = ["waiting_payment", "waiting_explanation"];
+const GENERIC_GUIDE = { icon: OctagonAlertIcon, steps: ["Open the receipt to see what it needs."] };
+const guideFor = (r: ReceiptRow) => GUIDE[r.state] ?? GENERIC_GUIDE;
+const rank = (r: ReceiptRow) => { const i = Object.keys(GUIDE).indexOf(r.state); return i < 0 ? 99 : i; }; // unguided ones last
+const bad = (r: ReceiptRow) => r.tone === "bad";
 const WAIT_HINT: Record<string, string> = {
   waiting_payment: "For the bank line to appear. Checked every 15 minutes.",
   waiting_explanation: "For you to explain the bank line in FreeAgent.",
@@ -47,7 +50,7 @@ export function DashboardPage() {
   usePageTitle("Dashboard");
   const { data, error, loading, reload } = useApi<ListResponse>("/api/receipts");
   const receipts = data?.receipts ?? [];
-  const reading = receipts.filter((r) => r.state === "reading");
+  const reading = receipts.filter((r) => r.stage === "reading");
 
   // Reading receipts move on within seconds; check back while any are in flight.
   useEffect(() => {
@@ -75,15 +78,15 @@ function Dashboard({ receipts, reading }: { receipts: ReceiptRow[]; reading: Rec
   // Which one is showing: by id, and by place, so that when it is dealt with the next one takes its place.
   const [sel, setSel] = useState<{ id: string | null; pos: number }>({ id: null, pos: 0 });
   // A fixed order (failed, could not read, choices), so moving through them never reshuffles the gallery.
-  const needs = receipts.filter((r) => ORDER.includes(r.state)).sort((a, b) => ORDER.indexOf(a.state) - ORDER.indexOf(b.state));
+  const needs = receipts.filter((r) => r.stage === "needs_you").sort((a, b) => rank(a) - rank(b));
   const found = needs.findIndex((r) => r.id === sel.id);
   const index = found >= 0 ? found : Math.min(sel.pos, needs.length - 1);
   const select = (i: number) => {
     const j = ((i % needs.length) + needs.length) % needs.length; // wraps at both ends
     setSel({ id: needs[j].id, pos: j });
   };
-  const waiting = receipts.filter((r) => WAITING.includes(r.state));
-  const duplicates = receipts.filter((r) => r.state === "duplicate");
+  const waiting = receipts.filter((r) => r.stage === "waiting");
+  const duplicates = receipts.filter((r) => r.stage === "duplicate");
 
   return (
     <div className="space-y-8">
@@ -104,12 +107,12 @@ function Dashboard({ receipts, reading }: { receipts: ReceiptRow[]; reading: Rec
 
 /** The one-line summary and a bar of where every receipt is. */
 function Headline({ receipts, needs }: { receipts: ReceiptRow[]; needs: number }) {
-  const count = (states: string[]) => receipts.filter((r) => states.includes(r.state)).length;
+  const count = (stage: ReceiptRow["stage"]) => receipts.filter((r) => r.stage === stage).length;
   const parts = [
-    { label: "reading", n: count(["reading"]), color: "var(--viz-1)" },
+    { label: "reading", n: count("reading"), color: "var(--viz-1)" },
     { label: needs === 1 ? "needs you" : "need you", n: needs, color: "var(--viz-2)" },
-    { label: "waiting", n: count(WAITING), color: "var(--color-neutral-400)" },
-    { label: "filed", n: count(["filed"]), color: "var(--viz-3)" },
+    { label: "waiting", n: count("waiting"), color: "var(--color-neutral-400)" },
+    { label: "filed", n: count("filed"), color: "var(--viz-3)" },
   ];
   const onTrack = parts.reduce((t, p) => t + p.n, 0) - needs;
   const shown = parts.filter((p) => p.n > 0);
@@ -162,8 +165,7 @@ function UpNext({ items, index, onSelect }: { items: ReceiptRow[]; index: number
 function Focus({ r }: { r: ReceiptRow }) {
   const { data } = useApi<ReceiptResponse>(`/api/receipts/${r.id}`, { live: false });
   const nav = useReceiptNav();
-  const need = NEEDS[r.state];
-  const Icon = need.icon;
+  const Icon = guideFor(r).icon;
   return (
     <div className="flex flex-wrap gap-6 p-5">
       {/* on a phone, what is wrong and the button come first; the receipt follows */}
@@ -174,9 +176,9 @@ function Focus({ r }: { r: ReceiptRow }) {
       <div className="order-1 flex min-w-0 flex-[1_1_300px] flex-col gap-4 md:order-2">
         <span className={cn(
           "inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold",
-          need.tone === "bad" ? "bg-destructive text-white" : "bg-amber-500/15 text-amber-800 dark:text-amber-300",
+          bad(r) ? "bg-destructive text-white" : "bg-amber-500/15 text-amber-800 dark:text-amber-300",
         )}>
-          <Icon className="size-3.5" aria-hidden />{need.label}
+          <Icon className="size-3.5" aria-hidden />{r.stateLabel}
         </span>
         <div>
           <h3 className="text-2xl font-semibold tracking-tight break-words">
@@ -186,14 +188,14 @@ function Focus({ r }: { r: ReceiptRow }) {
         </div>
         {r.totalMinor !== null && <p className="text-3xl font-semibold tracking-tight">{r.amount}</p>}
         {r.reason && (
-          <p className={cn("rounded-lg px-3 py-2 text-sm font-medium break-words", need.tone === "bad" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-900 dark:text-amber-200")}>
+          <p className={cn("rounded-lg px-3 py-2 text-sm font-medium break-words", bad(r) ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-900 dark:text-amber-200")}>
             {sentence(r.reason)}
           </p>
         )}
         <div>
           <h4 className="mb-1.5 text-sm font-semibold">What to do</h4>
           <ol className="list-decimal space-y-1 pl-5 text-sm text-foreground/80">
-            {need.steps.map((s) => <li key={s}>{s}</li>)}
+            {guideFor(r).steps.map((s) => <li key={s}>{s}</li>)}
           </ol>
         </div>
         <ReceiptActions r={r} size="default" />
@@ -227,14 +229,14 @@ function Gallery({ items, index, onSelect }: { items: ReceiptRow[]; index: numbe
                 type="button"
                 onClick={() => onSelect(i)}
                 aria-current={on ? "true" : undefined}
-                aria-label={`${i + 1} of ${items.length}: ${n.title}, ${NEEDS[n.state].label}`}
+                aria-label={`${i + 1} of ${items.length}: ${n.title}, ${n.stateLabel}`}
                 className={cn(
                   "flex h-full w-full min-w-0 flex-col gap-0.5 rounded-lg bg-card p-3 text-left ring-1 ring-foreground/10 transition-[background-color,box-shadow] hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                   on && "ring-2 ring-foreground",
                 )}
               >
                 <span className="flex items-center justify-between gap-2">
-                  <span className={cn("text-xs font-medium", n.state === "failed" ? "text-destructive" : "text-amber-800 dark:text-amber-300")}>{NEEDS[n.state].label}</span>
+                  <span className={cn("text-xs font-medium", bad(n) ? "text-destructive" : "text-amber-800 dark:text-amber-300")}>{n.stateLabel}</span>
                   <span className="text-[11px] text-muted-foreground tabular-nums">{i + 1}</span>
                 </span>
                 <span className="truncate font-medium">{n.title}</span>
